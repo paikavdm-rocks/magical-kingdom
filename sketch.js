@@ -40,6 +40,7 @@ function setup() {
   
   // Custom layout for UI underneath canvas
   let controls = createDiv();
+  controls.parent('controls-container');
   controls.style('display', 'flex');
   controls.style('flex-direction', 'column');
   controls.style('align-items', 'center');

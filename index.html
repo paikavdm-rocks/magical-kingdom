@@ -75,7 +75,7 @@
       display: block;
       border-radius: 10px;
       background-color: #000;
-      /* Ensures video doesn't overflow */
+      touch-action: pan-y !important; /* Forces mobile browser to allow scrolling when dragging on the canvas */
     }
   </style>
 </head>
@@ -90,6 +90,9 @@
       <p><b>4. The Grand Finale:</b> Close your hand into a <b>tight fist</b> to cast the ultimate spell! The mirror will take a magical portrait and permanently transform you and your room into a majestic Fairy woodland.</p>
     </div>
   </header>
+  
+  <!-- Anchor the controls explicitly above the canvas so it never requires scrolling -->
+  <div id="controls-container" style="display: flex; flex-direction: column; align-items: center; width: 100%; margin-bottom: 20px;"></div>
   
   <div id="canvas-container">
     <div id="p5-container"></div>
