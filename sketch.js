@@ -89,23 +89,29 @@ function setup() {
   feedback.parent(controls);
 
   let constraints = { audio: false, video: { facingMode: "user" } };
-  video = createCapture(constraints);
+  
+  // Wait for the strict mobile camera permissions to be approved AND the 
+  // media stream to safely exist before booting up the intensive ML5 trackers. 
+  // This explicitly prevents iOS/mobile from silently dropping the AI detection completely!
+  video = createCapture(constraints, function() {
+    handPose = ml5.handPose(() => {
+      handPose.detectStart(video, (results) => {
+        hands = results;
+      });
+    });
+    
+    bodyPose = ml5.bodyPose(() => {
+      bodyPose.detectStart(video, (results) => {
+        poses = results;
+      });
+    });
+  });
+  
   video.elt.setAttribute('playsinline', ''); // Critical for iOS
+  video.elt.setAttribute('autoplay', '');    // Critical for iOS
+  video.elt.setAttribute('muted', '');       // Critical for iOS
   video.size(width, height);
   video.hide();
-  
-  // Load models asynchronously so the page doesn't get stuck on "Loading..."
-  handPose = ml5.handPose(() => {
-    handPose.detectStart(video, (results) => {
-      hands = results;
-    });
-  });
-  
-  bodyPose = ml5.bodyPose(() => {
-    bodyPose.detectStart(video, (results) => {
-      poses = results;
-    });
-  });
 
   // Create real-time fairy effect colors
   wingColor = color(200, 100, 255, 120); // Pink/Purple glow
