@@ -28,8 +28,14 @@ let currentObjectMask = null; // AI result for object
 let currentObjectTransformed = null; // AI result for object style
 
 function setup() {
-  // Enlarge for dramatic flair
-  canvas = createCanvas(640, 480);
+  // Mobile responsive sizing
+  let cw = min(windowWidth - 40, 640);
+  let ch = cw * 0.75; // Standard 4:3
+  if (windowWidth < windowHeight) {
+    ch = cw * 1.33; // Portrait 3:4 for phones
+  }
+  
+  canvas = createCanvas(cw, ch);
   canvas.parent('p5-container');
   
   // Custom layout for UI underneath canvas
@@ -46,7 +52,8 @@ function setup() {
   inputRow.parent(controls);
   
   let input_image_field = createInput("A crystal water flower");
-  input_image_field.size(300);
+  input_image_field.style('width', '100%');
+  input_image_field.style('max-width', '250px');
   input_image_field.id("input_image_prompt");
   input_image_field.style('padding', '12px 20px');
   input_image_field.style('border-radius', '30px');
@@ -81,8 +88,10 @@ function setup() {
   feedback.style('margin', '0');
   feedback.parent(controls);
 
-  video = createCapture(VIDEO);
-  video.size(640, 480);
+  let constraints = { audio: false, video: { facingMode: "user" } };
+  video = createCapture(constraints);
+  video.elt.setAttribute('playsinline', ''); // Critical for iOS
+  video.size(width, height);
   video.hide();
   
   // Load models asynchronously so the page doesn't get stuck on "Loading..."
@@ -421,18 +430,17 @@ function drawElfEar(x, y, dir) {
 function applyObjectTransformation() {
   push();
   blendMode(SCREEN); // Makes the black background transparent!
-  let objW = width * 0.3;
-  let objH = height * 0.3;
+  let objSize = width * 0.35;
   
   let pos = getObjectPosition();
   
-  image(currentObjectTransformed, pos.x - objW/2, pos.y - objH/2, objW, objH);
+  image(currentObjectTransformed, pos.x - objSize/2, pos.y - objSize/2, objSize, objSize);
   
   // Add glitter around the specific transformed object
   strokeWeight(2);
   stroke(255, 255, 0, 150);
   noFill();
-  rect(pos.x - objW/2, pos.y - objH/2, objW, objH);
+  rect(pos.x - objSize/2, pos.y - objSize/2, objSize, objSize);
   pop();
 }
 
@@ -529,10 +537,9 @@ async function castSelfSpell() {
   // 2. Composite the Wand over the hand/hands!
   if (currentObjectTransformed && hands.length > 0) {
     let pos = getObjectPosition();
-    let objW = width * 0.3;
-    let objH = height * 0.3;
+    let objSize = width * 0.35;
     offscreen.blendMode(SCREEN);
-    offscreen.image(currentObjectTransformed, pos.x - objW/2, pos.y - objH/2, objW, objH);
+    offscreen.image(currentObjectTransformed, pos.x - objSize/2, pos.y - objSize/2, objSize, objSize);
     offscreen.blendMode(BLEND);
   }
   
