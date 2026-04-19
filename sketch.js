@@ -278,15 +278,14 @@ function draw() {
   drawWand();
 
   // --- MULTIPLAYER CLOUD SYNC ---
+  
+  // Calculate our active location to use for sync and interaction physics
+  let myPos = { x: mouseX, y: mouseY };
+  if (hands.length > 0) myPos = getObjectPosition();
+
   // Broadcast our magical location to the universe every 3 frames ONLY if authenticated securely
   if (myPlayerID !== null && frameCount % 3 === 0) {
-    let outputData = null;
-    if (hands.length > 0) {
-      let pos = getObjectPosition();
-      outputData = { x: pos.x, y: pos.y, aura: fairyFilterActive, name: myPlayerName, timestamp: Date.now() };
-    } else {
-      outputData = { x: mouseX, y: mouseY, aura: fairyFilterActive, name: myPlayerName, timestamp: Date.now() };
-    }
+    let outputData = { x: myPos.x, y: myPos.y, aura: fairyFilterActive, name: myPlayerName, timestamp: Date.now() };
     db.ref('players/' + myPlayerID).set(outputData);
   }
 
@@ -298,6 +297,32 @@ function draw() {
     let p = remotePlayers[id];
     // If a player disconnected violently without the cleanup hook, ignore them after 5 seconds
     if (now - p.timestamp > 5000) continue; 
+    
+    // 💥 INTERACTION: Wand Clashing & Cloud High Fives! 💥
+    if (dist(myPos.x, myPos.y, p.x, p.y) < 60) {
+      // Create a massive collaborative explosion exactly between your hands where you touch!
+      let sparkX = (myPos.x + p.x) / 2;
+      let sparkY = (myPos.y + p.y) / 2;
+      
+      // Emissive shower of bright white and gold sparks
+      for(let k=0; k<2; k++) {
+        let spark = new Particle(sparkX + random(-10, 10), sparkY + random(-10, 10));
+        spark.color = color(255, 255, random(150, 255));
+        spark.vx = random(-6, 6);
+        spark.vy = random(-6, 6);
+        particles.push(spark);
+      }
+      
+      // Draw an echoing shockwave ring expanding outwards
+      push();
+      noFill();
+      let ringSize = (frameCount % 15) * 8; // Expanding ring math
+      let ringAlpha = map(ringSize, 0, 120, 255, 0); // Fades out dynamically as it grows
+      stroke(255, 255, 200, ringAlpha);
+      strokeWeight(5);
+      ellipse(sparkX, sparkY, ringSize, ringSize);
+      pop();
+    }
     
     push();
     translate(p.x, p.y);
