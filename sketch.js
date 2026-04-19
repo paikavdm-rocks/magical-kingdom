@@ -18,11 +18,40 @@ let myPlayerID = null; // Bound securely via login
 let myPlayerName = "Fairy";
 let remotePlayers = {};
 
+// WebRTC Peer nodes
+let myPeerID = null;
+let peer = null;
+let connectedPeers = {};
+
 // Cloud event listener for remote players
 db.ref('players').on('value', (snapshot) => {
   const data = snapshot.val();
-  if (data) remotePlayers = data;
-  else remotePlayers = {};
+  if (data) {
+    remotePlayers = data;
+    // Scan for new connections to form WebRTC peer tunnels
+    for (let pID in remotePlayers) {
+      if (pID === myPlayerID) continue; // Skip ourselves
+      
+      let remotePeerID = remotePlayers[pID].peerID;
+      
+      // Only invoke the phone call logic if we haven't already shaken hands
+      // The tie-breaker mathematical standard string-comp avoids an infinite race collision!
+      if (remotePeerID && myPeerID && !connectedPeers[remotePeerID]) {
+        if (myPeerID > remotePeerID) {
+          // Send them our live P5 canvas as a literal video stream at 30 FPS completely invisibly!
+          let localStream = document.querySelector('canvas').captureStream(30);
+          let call = peer.call(remotePeerID, localStream);
+          connectedPeers[remotePeerID] = true;
+          
+          call.on('stream', (remoteStream) => {
+            addRemoteVideo(remotePeerID, remoteStream);
+          });
+        }
+      }
+    }
+  } else {
+    remotePlayers = {};
+  }
 });
 
 // Authentication System Logic
@@ -52,6 +81,9 @@ auth.onAuthStateChanged(user => {
     myPlayerID = user.uid;
     myPlayerName = user.email ? user.email.split('@')[0] : "Fairy"; // Base the name completely off the custom verified email
     
+    // Boot the Peer-to-Peer visual grid!
+    initWebRTC();
+    
     // Auto-delete securely deletes our fairy footprint from the world upon window exit
     db.ref('players/' + myPlayerID).onDisconnect().remove();
   } else {
@@ -61,6 +93,49 @@ auth.onAuthStateChanged(user => {
   }
 });
 // --------------------------------------
+
+// Inject the physical WebRTC HTML elements into the gallery!
+function addRemoteVideo(remotePeerID, stream) {
+  if (document.getElementById(remotePeerID)) return; // Don't duplicate rendering displays!
+  
+  let frame = createDiv();
+  frame.class('mirror-frame');
+  frame.id(remotePeerID);
+  
+  let vid = createElement('video');
+  vid.elt.srcObject = stream;
+  vid.elt.autoplay = true;
+  vid.elt.playsInline = true;
+  
+  // Automatically inherit the exact physical pixel proportions dictated by the local phone screen setup!
+  vid.style('width', canvas.width + 'px');
+  vid.style('height', canvas.height + 'px');
+  vid.style('border-radius', '10px');
+  vid.style('background-color', '#000');
+  
+  vid.parent(frame);
+  frame.parent('mirrors-gallery');
+}
+
+function initWebRTC() {
+  peer = new Peer();
+  peer.on('open', (id) => {
+    myPeerID = id;
+    // Tell Firebase that we are 100% authentically ready to receive FaceTime video calls!
+    if (myPlayerID) {
+      db.ref('players/' + myPlayerID).set({ peerID: myPeerID, name: myPlayerName });
+    }
+  });
+
+  peer.on('call', (call) => {
+    // We are receiving a call from another Player's browser! Pass them our P5 element stream natively.
+    let localStream = document.querySelector('canvas').captureStream(30);
+    call.answer(localStream);
+    call.on('stream', (remoteStream) => {
+      addRemoteVideo(call.peer, remoteStream);
+    });
+  });
+}
 
 const replicateProxy = "https://itp-ima-replicate-proxy.web.app/api/create_n_get";
 // Note: We use an offscreen graphics buffer for better segmentation logic.
@@ -277,95 +352,7 @@ function draw() {
   // Draw Wand
   drawWand();
 
-  // --- MULTIPLAYER CLOUD SYNC ---
-  
-  // Calculate our active location to use for sync and interaction physics
-  let myPos = { x: mouseX, y: mouseY };
-  if (hands.length > 0) myPos = getObjectPosition();
-
-  // Broadcast our magical location to the universe every 3 frames ONLY if authenticated securely
-  if (myPlayerID !== null && frameCount % 3 === 0) {
-    let outputData = { x: myPos.x, y: myPos.y, aura: fairyFilterActive, name: myPlayerName, timestamp: Date.now() };
-    db.ref('players/' + myPlayerID).set(outputData);
-  }
-
-  // Draw all majestic remote players visiting our mirror right now!
-  let now = Date.now();
-  for (let id in remotePlayers) {
-    if (id === myPlayerID) continue; // Don't draw myself!
-    
-    let p = remotePlayers[id];
-    // If a player disconnected violently without the cleanup hook, ignore them after 5 seconds
-    if (now - p.timestamp > 5000) continue; 
-    
-    // 💥 INTERACTION: Wand Clashing & Cloud High Fives! 💥
-    if (dist(myPos.x, myPos.y, p.x, p.y) < 60) {
-      // Create a massive collaborative explosion exactly between your hands where you touch!
-      let sparkX = (myPos.x + p.x) / 2;
-      let sparkY = (myPos.y + p.y) / 2;
-      
-      // Emissive shower of bright white and gold sparks
-      for(let k=0; k<2; k++) {
-        let spark = new Particle(sparkX + random(-10, 10), sparkY + random(-10, 10));
-        spark.color = color(255, 255, random(150, 255));
-        spark.vx = random(-6, 6);
-        spark.vy = random(-6, 6);
-        particles.push(spark);
-      }
-      
-      // Draw an echoing shockwave ring expanding outwards
-      push();
-      noFill();
-      let ringSize = (frameCount % 15) * 8; // Expanding ring math
-      let ringAlpha = map(ringSize, 0, 120, 255, 0); // Fades out dynamically as it grows
-      stroke(255, 255, 200, ringAlpha);
-      strokeWeight(5);
-      ellipse(sparkX, sparkY, ringSize, ringSize);
-      pop();
-    }
-    
-    push();
-    translate(p.x, p.y);
-    let floatY = sin(frameCount * 0.1) * 10; // Bob delicately up and down
-    
-    if (p.aura) { 
-      // Other player unlocked their aura! Render magnificent remote wings 
-      drawWing(0, floatY, 1);
-      drawWing(0, floatY, -1);
-      
-      blendMode(ADD);
-      noStroke();
-      fill(255, 100, 255, 200); ellipse(0, floatY, 40, 40);
-      fill(255, 255, 255, 255); ellipse(0, floatY, 15, 15);
-      blendMode(BLEND);
-    } else { 
-      // Other player is just a wandering blue wisp searching for magic
-      blendMode(ADD);
-      noStroke();
-      fill(100, 200, 255, 150); ellipse(0, floatY, 20, 20);
-      fill(255, 255, 255, 255); ellipse(0, floatY, 8, 8);
-      blendMode(BLEND);
-    }
-    pop();
-    
-    // Spawn remote fairy dust trails tracking everyone
-    if (frameCount % 6 === 0) {
-      let dust = new Particle(p.x + random(-10, 10), p.y + random(-10, 10));
-      dust.color = color(100, 200, 255);
-      particles.push(dust);
-    }
-    
-    // Draw Authenticated Player Name Tag
-    push();
-    fill(255, 255, 255, 230);
-    noStroke();
-    textAlign(CENTER);
-    textSize(20); // Scale perfectly for readability
-    textFont('Caveat'); // Whimsical font for tags!
-    text(p.name || "Fairy", p.x, p.y - 70); // Display floating text strictly above the avatar
-    pop();
-  }
-  // ------------------------------
+  // (The old multiplayer loop was removed because we now share a breathtaking WebRTC streaming gallery instead of a simulated coordinate ghost!)
   
   // Casting Overlay for Regional Spell
   if (isCasting) {
