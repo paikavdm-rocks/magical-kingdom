@@ -357,7 +357,7 @@ function draw() {
       noStroke();
       textAlign(CENTER);
       textSize(36);
-      textFont('Caveat', cursive); // Ensures elegant Fairy-tale UI parsing
+      textFont('Caveat'); // Ensures elegant Fairy-tale UI parsing
       
       // Floating glowing nametag dropshadow geometry
       drawingContext.shadowBlur = 10;
