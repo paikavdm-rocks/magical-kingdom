@@ -1,3 +1,32 @@
+// ----- FIREBASE MULTIPLAYER SETUP -----
+const firebaseConfig = {
+  apiKey: "AIzaSyBcnbOXvlC4Z30Y34BMShr8NaGozymIVLE",
+  authDomain: "fairytopia.firebaseapp.com",
+  databaseURL: "https://fairytopia-default-rtdb.firebaseio.com",
+  projectId: "fairytopia",
+  storageBucket: "fairytopia.firebasestorage.app",
+  messagingSenderId: "531666119490",
+  appId: "1:531666119490:web:329cedbdaf92247cdef6db"
+};
+
+// Initialize Firebase Realtime Cloud
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+const myPlayerID = 'fairy_' + Math.floor(Math.random() * 10000000);
+
+let remotePlayers = {};
+
+// Auto-delete our player from the world perfectly when the browser tab closes
+db.ref('players/' + myPlayerID).onDisconnect().remove();
+
+// Real-time listener for the entire cloud fairy lobby
+db.ref('players').on('value', (snapshot) => {
+  const data = snapshot.val();
+  if (data) remotePlayers = data;
+  else remotePlayers = {};
+});
+// --------------------------------------
+
 const replicateProxy = "https://itp-ima-replicate-proxy.web.app/api/create_n_get";
 // Note: We use an offscreen graphics buffer for better segmentation logic.
 
@@ -34,10 +63,10 @@ function setup() {
   if (windowWidth < windowHeight) {
     ch = cw * 1.33; // Portrait 3:4 for phones
   }
-  
+
   canvas = createCanvas(cw, ch);
   canvas.parent('p5-container');
-  
+
   // Custom layout for UI underneath canvas
   let controls = createDiv();
   controls.parent('controls-container');
@@ -46,12 +75,12 @@ function setup() {
   controls.style('align-items', 'center');
   controls.style('gap', '15px');
   controls.style('margin-top', '5px');
-  
+
   let inputRow = createDiv();
   inputRow.style('display', 'flex');
   inputRow.style('gap', '10px');
   inputRow.parent(controls);
-  
+
   let input_image_field = createInput("A crystal water flower");
   input_image_field.style('width', '100%');
   input_image_field.style('max-width', '250px');
@@ -65,7 +94,7 @@ function setup() {
   input_image_field.style('font-size', '1rem');
   input_image_field.style('outline', 'none');
   input_image_field.parent(inputRow);
-  
+
   let castButton = createButton("✨ CAST SPELL ✨");
   castButton.style('padding', '12px 24px');
   castButton.style('border-radius', '30px');
@@ -90,24 +119,24 @@ function setup() {
   feedback.parent(controls);
 
   let constraints = { audio: false, video: { facingMode: "user" } };
-  
+
   // Wait for the strict mobile camera permissions to be approved AND the 
   // media stream to safely exist before booting up the intensive ML5 trackers. 
   // This explicitly prevents iOS/mobile from silently dropping the AI detection completely!
-  video = createCapture(constraints, function() {
+  video = createCapture(constraints, function () {
     handPose = ml5.handPose(() => {
       handPose.detectStart(video, (results) => {
         hands = results;
       });
     });
-    
+
     bodyPose = ml5.bodyPose(() => {
       bodyPose.detectStart(video, (results) => {
         poses = results;
       });
     });
   });
-  
+
   video.elt.setAttribute('playsinline', ''); // Critical for iOS
   video.elt.setAttribute('autoplay', '');    // Critical for iOS
   video.elt.setAttribute('muted', '');       // Critical for iOS
@@ -130,7 +159,7 @@ function draw() {
     strokeWeight(20);
     stroke(wingColor);
     rect(0, 0, width, height);
-    
+
     // Ambient falling particles over the static image
     for (let i = particles.length - 1; i >= 0; i--) {
       particles[i].y += 1; // gently fall
@@ -151,22 +180,22 @@ function draw() {
   push();
   translate(width, 0); // Flipped view
   scale(-1, 1);
-  
+
   // Hand Shake velocity and pose logic
   if (hands.length > 0) {
     let hand = hands[0];
     let wrist = hand.wrist || hand.keypoints[0];
     let fist = isFist(hand);
-    
+
     if (prevHandX !== null && currentObjectTransformed && !fullFairyImage && !isTransformingSelf) {
       let speed = abs(wrist.x - prevHandX);
       handVelocity = lerp(handVelocity, speed, 0.4); // Reacts faster
-      
+
       // Shaking an open hand activates the real-time filter aura!
-      if (!fist && handVelocity > 8) { 
+      if (!fist && handVelocity > 8) {
         fairyFilterActive = true;
       }
-      
+
       // Closing your hand into a fist triggers the final API call!
       if (fist && fairyFilterActive) {
         castSelfSpell();
@@ -181,12 +210,12 @@ function draw() {
   }
   image(video, 0, 0, width, height);
   noTint();
-  
+
   // Basic real-time glowing particles around your "fairy form"
   if (currentObjectTransformed && fairyFilterActive) {
     applyFairyGlow();
   }
-  
+
   pop(); // End flipped view
 
   // 2. We use AI to apply the object transformation (if the spell worked)
@@ -212,24 +241,79 @@ function draw() {
 
   // Draw Wand
   drawWand();
+
+  // --- MULTIPLAYER CLOUD SYNC ---
+  // Broadcast our magical location to the universe every 3 frames to save bandwidth
+  if (frameCount % 3 === 0) {
+    let outputData = null;
+    if (hands.length > 0) {
+      let pos = getObjectPosition();
+      outputData = { x: pos.x, y: pos.y, aura: fairyFilterActive, timestamp: Date.now() };
+    } else {
+      outputData = { x: mouseX, y: mouseY, aura: fairyFilterActive, timestamp: Date.now() };
+    }
+    db.ref('players/' + myPlayerID).set(outputData);
+  }
+
+  // Draw all majestic remote players visiting our mirror right now!
+  let now = Date.now();
+  for (let id in remotePlayers) {
+    if (id === myPlayerID) continue; // Don't draw myself!
+    
+    let p = remotePlayers[id];
+    // If a player disconnected violently without the cleanup hook, ignore them after 5 seconds
+    if (now - p.timestamp > 5000) continue; 
+    
+    push();
+    translate(p.x, p.y);
+    let floatY = sin(frameCount * 0.1) * 10; // Bob delicately up and down
+    
+    if (p.aura) { 
+      // Other player unlocked their aura! Render magnificent remote wings 
+      drawWing(0, floatY, 1);
+      drawWing(0, floatY, -1);
+      
+      blendMode(ADD);
+      noStroke();
+      fill(255, 100, 255, 200); ellipse(0, floatY, 40, 40);
+      fill(255, 255, 255, 255); ellipse(0, floatY, 15, 15);
+      blendMode(BLEND);
+    } else { 
+      // Other player is just a wandering blue wisp searching for magic
+      blendMode(ADD);
+      noStroke();
+      fill(100, 200, 255, 150); ellipse(0, floatY, 20, 20);
+      fill(255, 255, 255, 255); ellipse(0, floatY, 8, 8);
+      blendMode(BLEND);
+    }
+    pop();
+    
+    // Spawn remote fairy dust trails tracking everyone
+    if (frameCount % 6 === 0) {
+      let dust = new Particle(p.x + random(-10, 10), p.y + random(-10, 10));
+      dust.color = color(100, 200, 255);
+      particles.push(dust);
+    }
+  }
+  // ------------------------------
   
   // Casting Overlay for Regional Spell
   if (isCasting) {
     fill(255, 255, 255, 200);
     rect(0, 0, width, height);
   }
-  
+
   // Casting Overlay for Full Self Spell
   if (isTransformingSelf) {
     fill(255, 255, 255, map(sin(frameCount * 0.1), -1, 1, 100, 200));
     rect(0, 0, width, height);
-    
+
     push();
     fill(255, 0, 255);
     textAlign(CENTER, CENTER);
     textFont('Cinzel Decorative');
     textSize(30);
-    text("🌟 AWAKENING FAIRY FORM 🌟", width/2, height/2);
+    text("🌟 AWAKENING FAIRY FORM 🌟", width / 2, height / 2);
     pop();
   }
 }
@@ -238,34 +322,34 @@ function draw() {
 function applyFairyGlow() {
   fill(wingColor);
   noStroke();
-  
+
   if (poses.length > 0) {
     let pose = poses[0];
-    
+
     // We are INSIDE the push/pop flipped canvas, so x already maps to width-x on screen!
-    let getFx = (kp) => kp.x; 
-    
+    let getFx = (kp) => kp.x;
+
     // Draw Wings on Shoulders
     let lShoulder = pose.left_shoulder;
     let rShoulder = pose.right_shoulder;
-    
+
     if (lShoulder && lShoulder.confidence > 0.1) {
       drawWing(getFx(lShoulder), lShoulder.y, 1); // 1 = Left Shoulder (Flaring rightwards visually)
     }
-    
+
     if (rShoulder && rShoulder.confidence > 0.1) {
       drawWing(getFx(rShoulder), rShoulder.y, -1); // -1 = Right Shoulder (Flaring leftwards visually)
     }
-    
+
     // Draw Fairy Crown and Ears on the Head
     let leftEar = pose.left_ear;
     let rightEar = pose.right_ear;
     let nose = pose.nose;
-    
+
     if (nose && nose.confidence > 0.1) {
       let nx = getFx(nose);
       let ny = nose.y;
-      
+
       // Draw pointy ears
       if (leftEar && leftEar.confidence > 0.1) {
         drawElfEar(getFx(leftEar), leftEar.y, 1);
@@ -273,11 +357,11 @@ function applyFairyGlow() {
       if (rightEar && rightEar.confidence > 0.1) {
         drawElfEar(getFx(rightEar), rightEar.y, -1);
       }
-      
+
       // Draw intricate crown
       drawCrown(nx, ny - 90);
     }
-    
+
     // Particles flowing down from wings
     if (frameCount % 3 === 0 && lShoulder && rShoulder) {
       particles.push(new Particle(getFx(lShoulder) + random(-20, 20), lShoulder.y));
@@ -287,7 +371,7 @@ function applyFairyGlow() {
     // Fallback if no person found
     drawWing(width * 0.4, height * 0.4, 1);
     drawWing(width * 0.6, height * 0.4, -1);
-    for(let i=0; i<3; i++) {
+    for (let i = 0; i < 3; i++) {
       particles.push(new Particle(random(width * 0.2, width * 0.8), random(height * 0.2, height * 0.6)));
     }
   }
@@ -296,100 +380,100 @@ function applyFairyGlow() {
 function drawWing(x, y, dir) {
   push();
   translate(x, y);
-  
+
   let flutter = sin(frameCount * 0.2) * 0.1;
-  rotate(dir * PI/8 + flutter); 
-  
+  rotate(dir * PI / 8 + flutter);
+
   // Glowing effect
   blendMode(ADD);
   noStroke();
-  
+
   // Insect wings (4 layers)
   fill(150, 50, 255, 100);
-  ellipse(dir * 50, -80, 100, 200); 
-  
+  ellipse(dir * 50, -80, 100, 200);
+
   fill(50, 200, 255, 120);
-  ellipse(dir * 40, -60, 60, 150); 
-  
+  ellipse(dir * 40, -60, 60, 150);
+
   fill(255, 150, 100, 150);
-  ellipse(dir * 30, -50, 30, 100); 
-  
+  ellipse(dir * 30, -50, 30, 100);
+
   fill(200, 50, 150, 100);
-  ellipse(dir * 35, 50, 70, 120); 
-  
+  ellipse(dir * 35, 50, 70, 120);
+
   fill(100, 100, 255, 150);
-  ellipse(dir * 25, 40, 40, 80); 
-  
-  blendMode(BLEND); 
+  ellipse(dir * 25, 40, 40, 80);
+
+  blendMode(BLEND);
   strokeWeight(2);
   noFill();
-  
+
   // Intricate pulsing veins
   let pulse = map(sin(frameCount * 0.1), -1, 1, 100, 255);
   stroke(255, 255, 255, pulse);
   bezier(0, 0, dir * 25, -40, dir * 60, -90, dir * 50, -180);
   bezier(0, 0, dir * 15, -20, dir * 40, -60, dir * 70, -70);
   bezier(0, 0, dir * 10, -10, dir * 30, -30, dir * 50, -20);
-  
+
   bezier(0, 0, dir * 15, 20, dir * 40, 60, dir * 30, 110);
   bezier(0, 0, dir * 10, 10, dir * 30, 40, dir * 60, 50);
-  
+
   pop();
 }
 
 function drawCrown(x, y) {
   push();
   translate(x, y);
-  
+
   // Floating magic halo rings
   noFill();
   strokeWeight(2);
   stroke(255, 215, 0, 150);
   push();
   rotate(frameCount * 0.02);
-  ellipse(0, 5, 80, 20); 
+  ellipse(0, 5, 80, 20);
   pop();
-  
+
   push();
   rotate(-frameCount * 0.015);
   stroke(255, 150, 255, 150);
   ellipse(0, -10, 100, 30);
   pop();
-  
+
   // Tiara lattice
   blendMode(ADD);
   noStroke();
-  fill(255, 100, 255, 255); 
+  fill(255, 100, 255, 255);
   ellipse(0, 0, 25, 30);
-  fill(255, 255, 255, 255); 
+  fill(255, 255, 255, 255);
   ellipse(0, 0, 10, 15);
-  
+
   blendMode(BLEND);
   fill(255, 215, 0, 220);
   triangle(-12, 0, 12, 0, 0, -50);
-  
+
   // Side gems
   for (let d = -1; d <= 1; d += 2) {
     for (let j = 1; j <= 3; j++) {
       let offset = j * 25;
-      let heightOff = j * 10; 
+      let heightOff = j * 10;
       let gemSize = 20 - j * 4;
-      
+
       stroke(255, 215, 0, 200);
       strokeWeight(3);
       noFill();
       bezier(d * (offset - 25), heightOff - 10, d * (offset - 15), heightOff, d * offset, heightOff, d * offset, heightOff);
-      
+
       noStroke();
       blendMode(ADD);
-      if (j === 2) fill(50, 200, 255, 255); 
-      else fill(255, 255, 100, 255); 
-      
+      if (j === 2) fill(50, 200, 255, 255);
+      else fill(255, 255, 100, 255);
+
       ellipse(d * offset, heightOff, gemSize, gemSize + 5);
-      
+
       blendMode(BLEND);
       fill(255, 215, 0, 220);
-      triangle(d * offset - gemSize/2, heightOff, d * offset + gemSize/2, heightOff, d * offset, heightOff - (40 - j * 8));
+      triangle(d * offset - gemSize / 2, heightOff, d * offset + gemSize / 2, heightOff, d * offset, heightOff - (40 - j * 8));
     }
   }
   pop();
@@ -398,18 +482,18 @@ function drawCrown(x, y) {
 function drawElfEar(x, y, dir) {
   push();
   translate(x, y);
-  
+
   noStroke();
-  fill(255, 220, 220, 255); 
-  
+  fill(255, 220, 220, 255);
+
   beginShape();
-  vertex(dir * -10, 20); 
-  vertex(dir * -15, -10); 
+  vertex(dir * -10, 20);
+  vertex(dir * -15, -10);
   vertex(dir * 50, -50); // longer tip!
-  vertex(dir * 15, -5); 
+  vertex(dir * 15, -5);
   vertex(dir * 5, 25);
   endShape(CLOSE);
-  
+
   fill(255, 120, 120, 200);
   beginShape();
   vertex(dir * -5, 10);
@@ -417,18 +501,18 @@ function drawElfEar(x, y, dir) {
   vertex(dir * 40, -40);
   vertex(dir * 5, 0);
   endShape(CLOSE);
-  
+
   // Magical dangling earring!
   stroke(255, 215, 0, 255);
   strokeWeight(2);
-  line(dir * 0, 20, dir * 0, 40); 
+  line(dir * 0, 20, dir * 0, 40);
   noStroke();
   blendMode(ADD);
   fill(100, 255, 255, 255);
-  ellipse(dir * 0, 45, 10, 20); 
+  ellipse(dir * 0, 45, 10, 20);
   fill(255, 255, 255, 255);
-  ellipse(dir * 0, 45, 4, 8); 
-  
+  ellipse(dir * 0, 45, 4, 8);
+
   blendMode(BLEND);
   pop();
 }
@@ -438,33 +522,33 @@ function applyObjectTransformation() {
   push();
   blendMode(SCREEN); // Makes the black background transparent!
   let objSize = width * 0.35;
-  
+
   let pos = getObjectPosition();
-  
-  image(currentObjectTransformed, pos.x - objSize/2, pos.y - objSize/2, objSize, objSize);
-  
+
+  image(currentObjectTransformed, pos.x - objSize / 2, pos.y - objSize / 2, objSize, objSize);
+
   // Add glitter around the specific transformed object
   strokeWeight(2);
   stroke(255, 255, 0, 150);
   noFill();
-  rect(pos.x - objSize/2, pos.y - objSize/2, objSize, objSize);
+  rect(pos.x - objSize / 2, pos.y - objSize / 2, objSize, objSize);
   pop();
 }
 
 function drawWand() {
   fill(255, 255, 200);
   noStroke();
-  
+
   if (hands.length > 0) {
     let hand = hands[0];
     let indexFinger = hand.index_finger_tip || hand.keypoints[8];
-    
+
     // Flipped coordinates
     let x = width - indexFinger.x;
     let y = indexFinger.y;
-    
+
     ellipse(x, y, 15, 15);
-    
+
     if (frameCount % 2 === 0) {
       particles.push(new Particle(x, y));
     }
@@ -490,7 +574,7 @@ async function castRegionalSpell(objectPrompt) {
   // We use Stable Diffusion XL in-painting/segmentation.
   let fairyAesthetic = "ethereal lighting, cinematic, glittery fairy kingdom style";
   // We only want the wand/object to be generated, NOT the user.
-  let targetModel = "google/nano-banana"; 
+  let targetModel = "google/nano-banana";
 
   // Prompt that ONLY asks for the standalone object
   let objectAesthetic = "A standalone, glowing magical item. " + fairyAesthetic + ", highly detailed 3D render, black background, isolated object.";
@@ -517,7 +601,7 @@ async function castRegionalSpell(objectPrompt) {
         currentObjectTransformed = incomingImage; // The whole transformed image
         isCasting = false;
         feedback.html("Spell successful! Look at your new magical item!");
-        for(let i=0; i<60; i++) particles.push(new Particle(random(width), random(height)));
+        for (let i = 0; i < 60; i++) particles.push(new Particle(random(width), random(height)));
       });
     }
   } catch (error) {
@@ -530,30 +614,30 @@ async function castSelfSpell() {
   if (isTransformingSelf) return;
   isTransformingSelf = true;
   feedback.html("Fairy Awakening... Please hold still and wait for the magic to finish!");
-  
+
   // Capture the full composite (video + the drawn wand proxy object)
   let offscreen = createGraphics(width, height);
-  
+
   // 1. Draw video flipped
   offscreen.push();
   offscreen.translate(width, 0);
   offscreen.scale(-1, 1);
   offscreen.image(video, 0, 0, width, height);
   offscreen.pop();
-  
+
   // 2. Composite the Wand over the hand/hands!
   if (currentObjectTransformed && hands.length > 0) {
     let pos = getObjectPosition();
     let objSize = width * 0.35;
     offscreen.blendMode(SCREEN);
-    offscreen.image(currentObjectTransformed, pos.x - objSize/2, pos.y - objSize/2, objSize, objSize);
+    offscreen.image(currentObjectTransformed, pos.x - objSize / 2, pos.y - objSize / 2, objSize, objSize);
     offscreen.blendMode(BLEND);
   }
-  
+
   let imgBase64 = offscreen.elt.toDataURL();
-  
+
   let fairyAesthetic = "ethereal lighting, cinematic, glittery fairy kingdom style, incredibly beautiful fairy magic.";
-  let targetModel = "google/nano-banana"; 
+  let targetModel = "google/nano-banana";
 
   // Image-To-Image prompt asking for a full transformation
   let prompt = "High quality masterpiece photo of an ethereal human transformed into a gorgeous magical fairy inside a glowing fairy forest. They are holding " + document.getElementById('input_image_prompt').value + " which is glowing powerfully. " + fairyAesthetic;
@@ -576,12 +660,12 @@ async function castSelfSpell() {
 
     if (result.output) {
       loadImage(result.output, (incomingImage) => {
-        fullFairyImage = incomingImage; 
+        fullFairyImage = incomingImage;
         isTransformingSelf = false;
         feedback.html("You are now a Fairy!");
-        
+
         // Spawn ultimate particle blast
-        for(let i=0; i<200; i++) particles.push(new Particle(width/2, height/2));
+        for (let i = 0; i < 200; i++) particles.push(new Particle(width / 2, height / 2));
       });
     }
   } catch (error) {
@@ -617,29 +701,29 @@ class Particle {
 function isFist(hand) {
   let foldedFingers = 0;
   let wrist = hand.keypoints[0];
-  
+
   let fingers = [
-    {tip: 8, mcp: 5},   // Index
-    {tip: 12, mcp: 9},  // Middle
-    {tip: 16, mcp: 13}, // Ring
-    {tip: 20, mcp: 17}  // Pinky
+    { tip: 8, mcp: 5 },   // Index
+    { tip: 12, mcp: 9 },  // Middle
+    { tip: 16, mcp: 13 }, // Ring
+    { tip: 20, mcp: 17 }  // Pinky
   ];
-  
+
   for (let f of fingers) {
     let tip = hand.keypoints[f.tip];
     let mcp = hand.keypoints[f.mcp];
-    
+
     let dTip = dist(wrist.x, wrist.y, tip.x, tip.y);
     let dMcp = dist(wrist.x, wrist.y, mcp.x, mcp.y);
-    
+
     // Mathematical heuristic:
     // A fully extended finger tip is generally > 2.0x further from the wrist than the knuckle.
     // A folded finger (closed fist) brings the tip essentially to the same distance as the knuckle (~1.0x to ~1.3x).
-    if (dTip < dMcp * 1.5) { 
+    if (dTip < dMcp * 1.5) {
       foldedFingers++;
     }
   }
-  
+
   return foldedFingers >= 3;
 }
 
@@ -647,15 +731,15 @@ function isFist(hand) {
 function getObjectPosition() {
   let tx = width / 2;
   let ty = height / 2;
-  
+
   if (hands.length > 0) {
     let sumX = 0;
     let sumY = 0;
     let count = min(hands.length, 2); // Max 2 hands supported
-    
+
     for (let i = 0; i < count; i++) {
       let wrist = hands[i].wrist || hands[i].keypoints[0];
-      
+
       if (count === 1) {
         // If holding with 1 hand, place the item squarely in the center of the palm!
         let mcp = hands[i].keypoints[9]; // Middle finger knuckle
@@ -673,10 +757,10 @@ function getObjectPosition() {
         sumY += wrist.y;
       }
     }
-    
+
     tx = sumX / count;
     ty = sumY / count;
   }
-  
-  return {x: tx, y: ty};
+
+  return { x: tx, y: ty };
 }
