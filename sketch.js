@@ -385,15 +385,15 @@ function draw() {
     if (prevHandX !== null && currentObjectTransformed && !fullFairyImage && !isTransformingSelf) {
       let speed = abs(wrist.x - prevHandX);
       handVelocity = lerp(handVelocity, speed, 0.4); // Reacts faster
-
+  
       // Shaking an open hand activates the real-time filter aura!
       if (!fist && handVelocity > 8) {
         fairyFilterActive = true;
       }
-
-      // Closing your hand into a fist triggers the final API call!
-      if (fist && fairyFilterActive) {
-        castSelfSpell();
+  
+      // Closing your hand into a fist triggers the collective Battle Spell!
+      if (fist && currentStep === 5) {
+        castBattleSpell();
       }
     }
     prevHandX = wrist.x;
@@ -713,17 +713,22 @@ function drawWand() {
   let y = pos.y;
 
   if (hands.length > 0) {
-    // Subtle indicator sparkle
-    noStroke();
-    fill(255, 255, 200, 150);
-    ellipse(x, y, 10, 10);
-
-    if (frameCount % 2 === 0) {
-      particles.push(new Particle(x, y));
+    // Glowing Fairy Dust Trail
+    for (let i = 0; i < 3; i++) { // Increase density
+      particles.push(new Particle(x + random(-10, 10), y + random(-10, 10)));
     }
+    
+    // Core glow at the wand tip
+    push();
+    drawingContext.shadowBlur = 20;
+    drawingContext.shadowColor = 'rgba(0, 255, 255, 0.8)';
+    noStroke();
+    fill(255, 255, 200, 200);
+    ellipse(x, y, 12, 12);
+    pop();
   } else {
     // Ambient dust around mouse
-    if (frameCount % 5 === 0) {
+    if (frameCount % 3 === 0) {
       particles.push(new Particle(mouseX, mouseY));
     }
   }
@@ -819,43 +824,43 @@ function updateInstructionSteps() {
   }
 }
 
-async function castSelfSpell() {
-  if (isTransformingSelf) return;
+async function castBattleSpell() {
+  if (isTransformingSelf) return; // Flag re-used to prevent spam
   isTransformingSelf = true;
-  feedback.html("Fairy Awakening... Please hold still and wait for the magic to finish!");
+  feedback.html("✨ COMMENCING THE GREAT BATTLE ✨ - Gathering all Fairy magic...");
 
-  // Capture the full composite (video + the drawn wand proxy object)
+  // Capture ALL mirror feeds for a collective battle scene
+  let videos = document.querySelectorAll('video');
+  let participants = [];
+  
+  // 1. Snapshot ourselves
   let offscreen = createGraphics(width, height);
-
-  // 1. Draw video flipped
   offscreen.push();
   offscreen.translate(width, 0);
   offscreen.scale(-1, 1);
   offscreen.image(video, 0, 0, width, height);
   offscreen.pop();
+  participants.push(offscreen.elt.toDataURL());
 
-  // 2. Composite the Wand over the hand/hands!
-  if (currentObjectTransformed && hands.length > 0) {
-    let pos = getObjectPosition();
-    let objSize = width * 0.35;
-    offscreen.blendMode(SCREEN);
-    offscreen.image(currentObjectTransformed, pos.x - objSize / 2, pos.y - objSize / 2, objSize, objSize);
-    offscreen.blendMode(BLEND);
-  }
+  // 2. Snapshot any remote friends currently in the gallery
+  videos.forEach(v => {
+    let g = createGraphics(v.videoWidth || 640, v.videoHeight || 480);
+    g.image(v, 0, 0, g.width, g.height);
+    participants.push(g.elt.toDataURL());
+  });
 
-  let imgBase64 = offscreen.elt.toDataURL();
+  feedback.html("Merging dimensions... the Fairies are engaging in battle!");
 
-  let fairyAesthetic = "ethereal lighting, cinematic, glittery fairy kingdom style, incredibly beautiful fairy magic.";
-  let targetModel = "google/nano-banana";
-
-  // Image-To-Image prompt asking for a full transformation
-  let prompt = "High quality masterpiece photo of an ethereal human transformed into a gorgeous magical fairy inside a glowing fairy forest. They are holding " + document.getElementById('input_image_prompt').value + " which is glowing powerfully. " + fairyAesthetic;
+  // Construct a prompt describing the multiplayer clash
+  let battlePrompt = `A high-action, masterpiece cinematic painting of several beautiful fairies engaged in an epic magical battle. ` +
+                     `They are flying through a dark, glowing enchanted forest, casting powerful spells from their wands. ` +
+                     `Glitter and fairy dust explosions everywhere. 8k, ethereal lighting, incredibly detailed.`;
 
   let postData = {
-    model: targetModel,
+    model: "google/nano-banana",
     input: {
-      prompt: prompt,
-      image_input: [imgBase64],
+      prompt: battlePrompt,
+      image_input: participants.slice(0, 3), // AI usually limited to few inputs, we pick top 3
     },
   };
 
@@ -871,16 +876,13 @@ async function castSelfSpell() {
       loadImage(result.output, (incomingImage) => {
         fullFairyImage = incomingImage;
         isTransformingSelf = false;
-        feedback.html("You are now a Fairy!");
-
-        // Spawn ultimate particle blast
-        for (let i = 0; i < 200; i++) particles.push(new Particle(width / 2, height / 2));
+        feedback.html("The Battle is Complete! Behold the Great Fairytopia War!");
+        for (let i = 0; i < 300; i++) particles.push(new Particle(width / 2, height / 2));
       });
     }
   } catch (error) {
     isTransformingSelf = false;
-    fairyFilterActive = false; // Reset to let them try again
-    feedback.html("The fairy transformation failed! Try shaking your hand again.");
+    feedback.html("The Battle Spell was interrupted! Try your fist gesture again.");
   }
 }
 
@@ -888,10 +890,11 @@ class Particle {
   constructor(x, y) {
     this.x = x;
     this.y = y;
-    this.vx = random(-2, 2);
-    this.vy = random(-2, 2);
+    this.vx = random(-3, 3);
+    this.vy = random(-3, 3);
     this.alpha = 255;
-    this.color = color(random(180, 255), random(100, 255), 255);
+    this.size = random(3, 8);
+    this.color = color(random(150, 255), random(150, 255), 255);
   }
   finished() { return this.alpha < 0; }
   update() {
@@ -901,8 +904,15 @@ class Particle {
   }
   show() {
     noStroke();
+    // Glowing effect
     fill(red(this.color), green(this.color), blue(this.color), this.alpha);
-    ellipse(this.x, this.y, random(2, 5));
+    ellipse(this.x, this.y, this.size);
+    
+    // Sparkle core
+    if (random(1) > 0.8) {
+      fill(255, 255, 255, this.alpha);
+      ellipse(this.x, this.y, this.size / 2);
+    }
   }
 }
 
