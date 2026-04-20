@@ -26,6 +26,7 @@ let connectedPeers = {};
 let currentStep = 1; // 1: Name, 2: Wand, 3: Round 1 Gathering, 4: Round 2 Duel, 5: Round 3 Revelation
 let spellContainer;
 let myFairyColor; // Unique to each player
+let myCanvasStream = null;
 let spiritOrbs = [];
 let fairyMana = 0;
 let spiritHealth = 100;
@@ -55,13 +56,18 @@ db.ref('players').on('value', (snapshot) => {
       if (remotePeerID && myPeerID && !connectedPeers[remotePeerID]) {
         if (myPeerID > remotePeerID) {
           // Send them our live P5 canvas as a literal video stream at 30 FPS completely invisibly!
-          let localStream = document.querySelector('canvas').captureStream(30);
-          let call = peer.call(remotePeerID, localStream);
-          connectedPeers[remotePeerID] = true;
-          
-          call.on('stream', (remoteStream) => {
-            addRemoteVideo(remotePeerID, remoteStream);
-          });
+          if (!myCanvasStream) {
+            let c = document.querySelector('canvas');
+            if (c) myCanvasStream = c.captureStream(30);
+          }
+          if (myCanvasStream) {
+            let call = peer.call(remotePeerID, myCanvasStream);
+            connectedPeers[remotePeerID] = true;
+            
+            call.on('stream', (remoteStream) => {
+              addRemoteVideo(remotePeerID, remoteStream);
+            });
+          }
         }
       }
     }
@@ -156,11 +162,16 @@ function initWebRTC() {
 
   peer.on('call', (call) => {
     // We are receiving a call from another Player's browser! Pass them our P5 element stream natively.
-    let localStream = document.querySelector('canvas').captureStream(30);
-    call.answer(localStream);
-    call.on('stream', (remoteStream) => {
-      addRemoteVideo(call.peer, remoteStream);
-    });
+    if (!myCanvasStream) {
+      let c = document.querySelector('canvas');
+      if (c) myCanvasStream = c.captureStream(30);
+    }
+    if (myCanvasStream) {
+      call.answer(myCanvasStream);
+      call.on('stream', (remoteStream) => {
+        addRemoteVideo(call.peer, remoteStream);
+      });
+    }
   });
 }
 
@@ -339,11 +350,13 @@ function setup() {
   // media stream to safely exist before booting up the intensive ML5 trackers. 
   // This explicitly prevents iOS/mobile from silently dropping the AI detection completely!
   // Start capture with explicit constraints
-  video = createCapture(constraints, () => {
-    console.log("Cam ready");
-    video.elt.play(); // Force play
+  video = createCapture(VIDEO, () => {
+    console.log("Webcam Active");
+    // Ensure the stream dimensions match our canvas exactly for processing
+    video.size(width, height);
+    video.elt.play().catch(e => console.log("Play failed", e));
     
-    // Start tracking once stream is confirmed
+    // Start tracking once stream is confirmed flowing
     handPose = ml5.handPose(() => {
       handPose.detectStart(video, (results) => { hands = results; });
     });
@@ -353,8 +366,8 @@ function setup() {
   });
 
   video.elt.setAttribute('playsinline', ''); 
-  video.autoplay = true; 
-  video.muted = true;
+  video.elt.setAttribute('autoplay', 'autoplay'); 
+  video.elt.setAttribute('muted', 'muted');
   video.hide();
 
   // Create default fairy effect color (will be set properly after login)
