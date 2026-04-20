@@ -29,6 +29,9 @@ let myFairyColor; // Unique to each player
 let spiritOrbs = [];
 let fairyMana = 0;
 let spiritHealth = 100;
+let mySpellChoice = 'Solar';
+let isMegaSpell = false;
+let combatButtons = [];
 
 // Cloud event listener for remote players
 db.ref('players').on('value', (snapshot) => {
@@ -146,7 +149,8 @@ function initWebRTC() {
         peerID: myPeerID, 
         name: myPlayerName, 
         mana: 0, 
-        spirit: 100 
+        spirit: 100,
+        choice: 'Solar'
       });
     }
   });
@@ -488,6 +492,19 @@ function draw() {
       rect(-50, 5, 100, 8, 4);
       fill(myFairyColor || color(255, 0, 255));
       rect(-50, 5, map(spiritHealth, 0, 100, 0, 100), 8, 4);
+      pop();
+      
+      // Spell Choice Icon
+      push();
+      translate(nx + 60, ny - 135);
+      stroke(255, 255, 255, 100);
+      fill(0, 0, 0, 150);
+      ellipse(0, 0, 30, 30);
+      textAlign(CENTER, CENTER);
+      textSize(10);
+      fill(255);
+      let choice = data && data[pID] ? data[pID].choice : 'Solar';
+      text(choice.charAt(0), 0, 0);
       pop();
     }
   }
@@ -851,6 +868,9 @@ async function castRegionalSpell(objectPrompt) {
 function nextStep(step) {
   if (step <= currentStep) return;
   
+  // Clean up old step UI
+  if (step === 4) setupCombatUI(); // Prepare buttons for Round 2
+
   // Hide current
   let prev = document.getElementById('instr-' + currentStep);
   if (prev) prev.style.display = 'none';
@@ -868,6 +888,40 @@ function nextStep(step) {
         particles.push(new Particle(width / 2, height / 2));
     }
   }
+}
+
+function setupCombatUI() {
+  let types = ['Solar', 'Lunar', 'Floral'];
+  types.forEach(type => {
+    let btn = createButton(type);
+    btn.parent(spellContainer);
+    btn.style('padding', '10px 15px');
+    btn.style('border-radius', '10px');
+    btn.style('background', 'rgba(255,255,255,0.1)');
+    btn.style('color', 'white');
+    btn.style('border', '1px solid white');
+    btn.style('cursor', 'pointer');
+    btn.mousePressed(() => {
+      mySpellChoice = type;
+      if (myPlayerID) db.ref('players/' + myPlayerID + '/choice').set(mySpellChoice);
+      combatButtons.forEach(b => b.style('background', 'rgba(255,255,255,0.1)'));
+      btn.style('background', 'rgba(0, 255, 255, 0.4)');
+    });
+    combatButtons.push(btn);
+  });
+
+  let megaBtn = createButton("MEGA (10 Mana)");
+  megaBtn.parent(spellContainer);
+  megaBtn.style('padding', '10px 15px');
+  megaBtn.style('border-radius', '10px');
+  megaBtn.style('background', 'rgba(255, 0, 255, 0.2)');
+  megaBtn.style('color', 'white');
+  megaBtn.style('cursor', 'pointer');
+  megaBtn.mousePressed(() => {
+    isMegaSpell = !isMegaSpell;
+    megaBtn.style('background', isMegaSpell ? 'rgba(255, 0, 255, 0.6)' : 'rgba(255, 0, 255, 0.2)');
+  });
+  combatButtons.push(megaBtn);
 }
 
 function updateInstructionSteps() {
@@ -910,36 +964,64 @@ function handleSpiritOrbs() {
   }
 }
 
-// Round 2 Duel Mechanics: Click to blast!
+// Round 2 Duel Mechanics: RPS Battle!
 function mousePressed() {
-  if (currentStep === 4 && fairyMana >= 5) {
-    fairyMana -= 5;
-    if (myPlayerID) db.ref('players/' + myPlayerID + '/mana').set(fairyMana);
-    
+  let cost = isMegaSpell ? 10 : 5;
+  let damage = isMegaSpell ? 35 : 15;
+
+  if (currentStep === 4 && fairyMana >= cost) {
     // Check if we aimed at a remote mirror
     let elements = document.elementsFromPoint(mouseX, mouseY);
     elements.forEach(el => {
       let frame = el.closest('.mirror-frame');
       if (frame && frame.id !== 'local-mirror-container' && frame.id !== '') {
-        // We hit someone! (PeerID is the frame ID)
         let hitID = frame.id;
-        // In this architecture, find the player with this peerID
         for (let pID in remotePlayers) {
           if (remotePlayers[pID].peerID === hitID) {
-            let newSpirit = max(0, (remotePlayers[pID].spirit || 100) - 10);
-            db.ref('players/' + pID + '/spirit').set(newSpirit);
+            let targetChoice = remotePlayers[pID].choice || 'Solar';
+            
+            // RPS RESOLUTION
+            let win = false;
+            let draw = false;
+            if (mySpellChoice === targetChoice) draw = true;
+            else if (mySpellChoice === 'Solar' && targetChoice === 'Lunar') win = true;
+            else if (mySpellChoice === 'Lunar' && targetChoice === 'Floral') win = true;
+            else if (mySpellChoice === 'Floral' && targetChoice === 'Solar') win = true;
+
+            // Apply logic
+            if (win) {
+              let newSpirit = max(0, (remotePlayers[pID].spirit || 100) - damage);
+              db.ref('players/' + pID + '/spirit').set(newSpirit);
+              fairyMana -= cost;
+            } else if (draw) {
+              let newSpirit = max(0, (remotePlayers[pID].spirit || 100) - 5);
+              db.ref('players/' + pID + '/spirit').set(newSpirit);
+              spiritHealth = max(0, spiritHealth - 5);
+              fairyMana -= cost;
+            } else {
+              // LOSE: Recoil damage!
+              spiritHealth = max(0, spiritHealth - (damage / 2));
+              fairyMana -= cost;
+              feedback.html("Spell reflected! Be careful of their element!");
+            }
+
+            if (myPlayerID) {
+              db.ref('players/' + myPlayerID + '/mana').set(fairyMana);
+              db.ref('players/' + myPlayerID + '/spirit').set(spiritHealth);
+            }
             break;
           }
         }
       }
     });
 
-    // Visual blast
+    // Visual blast burst
     let pos = getObjectPosition();
-    for (let i = 0; i < 50; i++) {
+    for (let i = 0; i < 30; i++) {
         let p = new Particle(pos.x, pos.y);
-        p.vx = (mouseX - pos.x) * 0.1 + random(-2, 2);
-        p.vy = (mouseY - pos.y) * 0.1 + random(-2, 2);
+        p.color = isMegaSpell ? color(255, 255, 255) : myFairyColor;
+        p.vx = (mouseX - pos.x) * 0.12 + random(-3, 3);
+        p.vy = (mouseY - pos.y) * 0.12 + random(-3, 3);
         particles.push(p);
     }
   }
