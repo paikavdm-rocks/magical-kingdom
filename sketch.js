@@ -25,6 +25,7 @@ let peer = null;
 let connectedPeers = {};
 let currentStep = 1; // 1: Name, 2: Wand, 3: Grasp, 4: Aura, 5: Finale
 let spellContainer;
+let myFairyColor; // Unique to each player
 
 // Cloud event listener for remote players
 db.ref('players').on('value', (snapshot) => {
@@ -84,6 +85,10 @@ auth.onAuthStateChanged(user => {
     myPlayerID = user.uid;
     myPlayerName = user.email ? user.email.split('@')[0] : "Fairy"; // Base the name completely off the custom verified email
     if (nameInput) nameInput.value(myPlayerName);
+    
+    // Assign a unique magical color to this user based on their ID
+    myFairyColor = hashStringToColor(myPlayerID);
+    wingColor = myFairyColor;
     
     // Boot the Peer-to-Peer visual grid!
     initWebRTC();
@@ -332,11 +337,24 @@ function setup() {
   video.elt.setAttribute('playsinline', ''); // Critical for iOS
   video.elt.setAttribute('autoplay', '');    // Critical for iOS
   video.elt.setAttribute('muted', '');       // Critical for iOS
-  video.size(width, height);
   video.hide();
 
-  // Create real-time fairy effect colors
-  wingColor = color(200, 100, 255, 120); // Pink/Purple glow
+  // Create default fairy effect color (will be set properly after login)
+  wingColor = color(200, 100, 255, 120); 
+}
+
+function hashStringToColor(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  // Convert to high-saturation, bright fairy-tale color
+  let h = abs(hash % 360);
+  push();
+  colorMode(HSL);
+  let c = color(h, 80, 70, 0.5);
+  pop();
+  return c;
 }
 
 function draw() {
@@ -431,13 +449,13 @@ function draw() {
       textFont('Caveat'); // Ensures elegant Fairy-tale UI parsing
       
       // Floating glowing nametag dropshadow geometry
-      drawingContext.shadowBlur = 10;
-      drawingContext.shadowColor = 'rgba(255, 0, 255, 0.8)';
+      drawingContext.shadowBlur = 15;
+      drawingContext.shadowColor = myFairyColor || 'rgba(255, 0, 255, 0.8)';
       
       text(myPlayerName, nx, ny - 140);
       
       // Magical pinpoint anchoring the tag
-      fill(255, 215, 0, 200);
+      fill(myFairyColor || color(255, 215, 0, 200));
       ellipse(nx, ny - 110, 10, 10);
       pop();
     }
@@ -720,10 +738,10 @@ function drawWand() {
     
     // Core glow at the wand tip
     push();
-    drawingContext.shadowBlur = 20;
-    drawingContext.shadowColor = 'rgba(0, 255, 255, 0.8)';
+    drawingContext.shadowBlur = 30;
+    drawingContext.shadowColor = myFairyColor || 'rgba(0, 255, 255, 0.8)';
     noStroke();
-    fill(255, 255, 200, 200);
+    fill(255, 255, 255, 220); // White core within colored glow
     ellipse(x, y, 12, 12);
     pop();
   } else {
@@ -894,7 +912,13 @@ class Particle {
     this.vy = random(-3, 3);
     this.alpha = 255;
     this.size = random(3, 8);
-    this.color = color(random(150, 255), random(150, 255), 255);
+    
+    // Inherit the fairy's specific magic color
+    if (myFairyColor) {
+      this.color = myFairyColor;
+    } else {
+      this.color = color(random(150, 255), random(150, 255), 255);
+    }
   }
   finished() { return this.alpha < 0; }
   update() {
