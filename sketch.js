@@ -23,15 +23,25 @@ let remotePlayers = {};
 let myPeerID = null;
 let peer = null;
 let connectedPeers = {};
-let currentStep = 1; // 1: Name, 2: Wand, 3: Grasp, 4: Aura, 5: Finale
+let currentStep = 1; // 1: Name, 2: Wand, 3: Round 1 Gathering, 4: Round 2 Duel, 5: Round 3 Revelation
 let spellContainer;
 let myFairyColor; // Unique to each player
+let spiritOrbs = [];
+let fairyMana = 0;
+let spiritHealth = 100;
 
 // Cloud event listener for remote players
 db.ref('players').on('value', (snapshot) => {
   const data = snapshot.val();
   if (data) {
     remotePlayers = data;
+
+    // Sync our own stats from the cloud to ensure consistency across sessions
+    if (myPlayerID && data[myPlayerID]) {
+      fairyMana = data[myPlayerID].mana || 0;
+      spiritHealth = data[myPlayerID].spirit || 100;
+    }
+
     // Scan for new connections to form WebRTC peer tunnels
     for (let pID in remotePlayers) {
       if (pID === myPlayerID) continue; // Skip ourselves
@@ -132,7 +142,12 @@ function initWebRTC() {
     myPeerID = id;
     // Tell Firebase that we are 100% authentically ready to receive FaceTime video calls!
     if (myPlayerID) {
-      db.ref('players/' + myPlayerID).set({ peerID: myPeerID, name: myPlayerName });
+      db.ref('players/' + myPlayerID).set({ 
+        peerID: myPeerID, 
+        name: myPlayerName, 
+        mana: 0, 
+        spirit: 100 
+      });
     }
   });
 
@@ -458,10 +473,31 @@ function draw() {
       fill(myFairyColor || color(255, 215, 0, 200));
       ellipse(nx, ny - 110, 10, 10);
       pop();
+      
+      // DISPLAY MANA/HEALTH INDICATORS
+      push();
+      translate(nx, ny - 180);
+      noStroke();
+      textAlign(CENTER);
+      textSize(14);
+      fill(255, 255, 255, 200);
+      text(`MANA: ${fairyMana} | SPIRIT: ${spiritHealth}%`, 0, 0);
+      
+      // Health Bar
+      fill(50, 0, 50, 150);
+      rect(-50, 5, 100, 8, 4);
+      fill(myFairyColor || color(255, 0, 255));
+      rect(-50, 5, map(spiritHealth, 0, 100, 0, 100), 8, 4);
+      pop();
     }
   }
 
-  // 2. We use AI to apply the object transformation (if the spell worked)
+  // 2. Round Specific Overlay Logic
+  if (currentStep === 3) {
+    handleSpiritOrbs();
+  }
+
+  // 3. We use AI to apply the object transformation (if the spell worked)
   if (currentObjectTransformed) {
     // If the AI identified the object segment, we can isolate it
     // Using simple masking here to demonstrate segmentation.
@@ -797,7 +833,7 @@ async function castRegionalSpell(objectPrompt) {
         isCasting = false;
         feedback.html("Spell successful! Look at your new magical item!");
         
-        // Move to Step 3!
+        // Move to Step 3 (Round 1: Gathering)!
         if (currentStep === 2) {
           nextStep(3);
         }
@@ -835,10 +871,77 @@ function nextStep(step) {
 }
 
 function updateInstructionSteps() {
-  if (currentStep === 3 && hands.length > 0) {
+  if (currentStep === 3 && fairyMana >= 50) {
     nextStep(4);
-  } else if (currentStep === 4 && fairyFilterActive) {
-    nextStep(5);
+  }
+}
+
+function handleSpiritOrbs() {
+  // Spawn Orbs
+  if (frameCount % 60 === 0 && spiritOrbs.length < 5) {
+    spiritOrbs.push({
+      x: random(50, width - 50),
+      y: random(50, height - 50),
+      size: random(20, 40),
+      seed: random(1000)
+    });
+  }
+
+  // Draw & Check Collision
+  let pos = getObjectPosition();
+  for (let i = spiritOrbs.length - 1; i >= 0; i--) {
+    let o = spiritOrbs[i];
+    let wave = sin(frameCount * 0.05 + o.seed) * 5;
+    
+    push();
+    drawingContext.shadowBlur = 15;
+    drawingContext.shadowColor = 'rgba(255, 255, 255, 0.8)';
+    fill(255, 255, 255, 180);
+    noStroke();
+    ellipse(o.x, o.y + wave, o.size);
+    pop();
+
+    if (dist(pos.x, pos.y, o.x, o.y + wave) < o.size) {
+      spiritOrbs.splice(i, 1);
+      fairyMana += 10;
+      if (myPlayerID) db.ref('players/' + myPlayerID + '/mana').set(fairyMana);
+      for (let j = 0; j < 20; j++) particles.push(new Particle(o.x, o.y));
+    }
+  }
+}
+
+// Round 2 Duel Mechanics: Click to blast!
+function mousePressed() {
+  if (currentStep === 4 && fairyMana >= 5) {
+    fairyMana -= 5;
+    if (myPlayerID) db.ref('players/' + myPlayerID + '/mana').set(fairyMana);
+    
+    // Check if we aimed at a remote mirror
+    let elements = document.elementsFromPoint(mouseX, mouseY);
+    elements.forEach(el => {
+      let frame = el.closest('.mirror-frame');
+      if (frame && frame.id !== 'local-mirror-container' && frame.id !== '') {
+        // We hit someone! (PeerID is the frame ID)
+        let hitID = frame.id;
+        // In this architecture, find the player with this peerID
+        for (let pID in remotePlayers) {
+          if (remotePlayers[pID].peerID === hitID) {
+            let newSpirit = max(0, (remotePlayers[pID].spirit || 100) - 10);
+            db.ref('players/' + pID + '/spirit').set(newSpirit);
+            break;
+          }
+        }
+      }
+    });
+
+    // Visual blast
+    let pos = getObjectPosition();
+    for (let i = 0; i < 50; i++) {
+        let p = new Particle(pos.x, pos.y);
+        p.vx = (mouseX - pos.x) * 0.1 + random(-2, 2);
+        p.vy = (mouseY - pos.y) * 0.1 + random(-2, 2);
+        particles.push(p);
+    }
   }
 }
 
@@ -869,10 +972,22 @@ async function castBattleSpell() {
 
   feedback.html("Merging dimensions... the Fairies are engaging in battle!");
 
-  // Construct a prompt describing the multiplayer clash
+  // Construct a prompt describing the multiplayer clash, emphasizing the winner
+  let winner = myPlayerName;
+  let winnerColor = (myFairyColor ? myFairyColor.toString() : "purple");
+  let maxSpirit = spiritHealth;
+
+  for (let pID in remotePlayers) {
+    if ((remotePlayers[pID].spirit || 0) > maxSpirit) {
+      maxSpirit = remotePlayers[pID].spirit;
+      winner = remotePlayers[pID].name || "Fairy";
+    }
+  }
+
   let battlePrompt = `A high-action, masterpiece cinematic painting of several beautiful fairies engaged in an epic magical battle. ` +
-                     `They are flying through a dark, glowing enchanted forest, casting powerful spells from their wands. ` +
-                     `Glitter and fairy dust explosions everywhere. 8k, ethereal lighting, incredibly detailed.`;
+                     `The winner, ${winner}, is at the center casting a massive blast of ${winnerColor} magic. ` +
+                     `They are flying through a dark, glowing enchanted forest. ` +
+                     `Glitter and fairy dust explosions everywhere. 8k, ethereal lighting, incredibly detailed, dominant colour is ${winnerColor}.`;
 
   let postData = {
     model: "google/nano-banana",
