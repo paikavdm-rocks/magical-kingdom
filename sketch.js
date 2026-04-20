@@ -16,6 +16,7 @@ const auth = firebase.auth();
 
 let myPlayerID = null; // Bound securely via login
 let myPlayerName = "Fairy";
+let nameInput;
 let remotePlayers = {};
 
 // WebRTC Peer nodes
@@ -80,6 +81,7 @@ auth.onAuthStateChanged(user => {
     document.getElementById('login-overlay').style.display = 'none';
     myPlayerID = user.uid;
     myPlayerName = user.email ? user.email.split('@')[0] : "Fairy"; // Base the name completely off the custom verified email
+    if (nameInput) nameInput.value(myPlayerName);
     
     // Boot the Peer-to-Peer visual grid!
     initWebRTC();
@@ -188,8 +190,46 @@ function setup() {
 
   let inputRow = createDiv();
   inputRow.style('display', 'flex');
+  inputRow.style('flex-wrap', 'wrap');
+  inputRow.style('justify-content', 'center');
   inputRow.style('gap', '10px');
   inputRow.parent(controls);
+
+  // --- FAIRY NAME OPTION ---
+  let nameContainer = createDiv();
+  nameContainer.style('display', 'flex');
+  nameContainer.style('align-items', 'center');
+  nameContainer.style('gap', '10px');
+  nameContainer.parent(inputRow);
+
+  let nameLabel = createSpan("Your Fairy Name:");
+  nameLabel.style('color', '#ffbaff');
+  nameLabel.style('font-family', 'Caveat');
+  nameLabel.style('font-size', '1.4rem');
+  nameLabel.parent(nameContainer);
+
+  nameInput = createInput(myPlayerName);
+  nameInput.style('padding', '10px 15px');
+  nameInput.style('border-radius', '25px');
+  nameInput.style('border', '2px solid #00ffff');
+  nameInput.style('background', 'rgba(20,0,40,0.8)');
+  nameInput.style('color', 'white');
+  nameInput.style('font-family', 'Quicksand');
+  nameInput.style('font-size', '1rem');
+  nameInput.style('outline', 'none');
+  nameInput.parent(nameContainer);
+  nameInput.input(() => {
+    myPlayerName = nameInput.value();
+    if (myPlayerID) {
+      db.ref('players/' + myPlayerID + '/name').set(myPlayerName);
+    }
+  });
+  // -------------------------
+
+  let spellContainer = createDiv();
+  spellContainer.style('display', 'flex');
+  spellContainer.style('gap', '10px');
+  spellContainer.parent(inputRow);
 
   let input_image_field = createInput("A crystal water flower");
   input_image_field.style('width', '100%');
@@ -203,7 +243,7 @@ function setup() {
   input_image_field.style('font-family', 'Quicksand');
   input_image_field.style('font-size', '1rem');
   input_image_field.style('outline', 'none');
-  input_image_field.parent(inputRow);
+  input_image_field.parent(spellContainer);
 
   let castButton = createButton("✨ CAST SPELL ✨");
   castButton.style('padding', '12px 24px');
@@ -219,7 +259,7 @@ function setup() {
   castButton.mousePressed(() => {
     castRegionalSpell(input_image_field.value());
   });
-  castButton.parent(inputRow);
+  castButton.parent(spellContainer);
   
   let logoutBtn = createButton("🚪 SIGN OUT");
   logoutBtn.style('padding', '12px 24px');
@@ -233,7 +273,7 @@ function setup() {
   logoutBtn.mousePressed(() => {
     auth.signOut();
   });
-  logoutBtn.parent(inputRow);
+  logoutBtn.parent(spellContainer);
 
   feedback = createP("Look into the Mirror! Conjure your item first.");
   feedback.style('color', '#ffbaff');
