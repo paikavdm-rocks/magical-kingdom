@@ -23,6 +23,7 @@ let remotePlayers = {};
 let myPeerID = null;
 let peer = null;
 let connectedPeers = {};
+let currentStep = 1; // 1: Conjure, 2: Grasp, 3: Aura, 4: Finale
 
 // Cloud event listener for remote players
 db.ref('players').on('value', (snapshot) => {
@@ -179,6 +180,9 @@ function setup() {
   canvas = createCanvas(cw, ch);
   canvas.parent('p5-container');
 
+  // Initially hide the mirrors gallery until step 2
+  document.getElementById('mirrors-gallery').style.display = 'none';
+
   // Custom layout for UI underneath canvas
   let controls = createDiv();
   controls.parent('controls-container');
@@ -313,6 +317,9 @@ function setup() {
 
 function draw() {
   background(0);
+
+  // 1. Progress Step Logic
+  updateInstructionSteps();
 
   if (fullFairyImage) {
     // 🌟 THE FINAL MASTERPIECE 🌟
@@ -742,12 +749,51 @@ async function castRegionalSpell(objectPrompt) {
         currentObjectTransformed = incomingImage; // The whole transformed image
         isCasting = false;
         feedback.html("Spell successful! Look at your new magical item!");
+        
+        // Move to Step 2!
+        if (currentStep === 1) {
+          nextStep(2);
+          document.getElementById('mirrors-gallery').style.display = 'flex';
+          document.getElementById('mirrors-gallery').classList.add('fly-in');
+        }
+
         for (let i = 0; i < 60; i++) particles.push(new Particle(random(width), random(height)));
       });
     }
   } catch (error) {
     isCasting = false;
     feedback.html("The transformation spell failed! Make sure you are holding the object clearly!");
+  }
+}
+
+// Helper to manage step progression
+function nextStep(step) {
+  if (step <= currentStep) return;
+  
+  // Hide current
+  let prev = document.getElementById('instr-' + currentStep);
+  if (prev) prev.style.display = 'none';
+
+  currentStep = step;
+
+  // Show next with animation
+  let next = document.getElementById('instr-' + currentStep);
+  if (next) {
+    next.style.display = 'block';
+    next.classList.add('fly-in');
+    
+    // Trigger special "explosion" effects
+    for (let i = 0; i < 50; i++) {
+        particles.push(new Particle(width / 2, height / 2));
+    }
+  }
+}
+
+function updateInstructionSteps() {
+  if (currentStep === 2 && hands.length > 0) {
+    nextStep(3);
+  } else if (currentStep === 3 && fairyFilterActive) {
+    nextStep(4);
   }
 }
 
