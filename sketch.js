@@ -46,16 +46,19 @@ db.ref('players').on('value', (snapshot) => {
     }
 
     // Scan for new connections to form WebRTC peer tunnels
+    const now = Date.now();
     for (let pID in remotePlayers) {
       if (pID === myPlayerID) continue; // Skip ourselves
       
-      let remotePeerID = remotePlayers[pID].peerID;
+      let pData = remotePlayers[pID];
+      let remotePeerID = pData.peerID;
       
-      // Only invoke the phone call logic if we haven't already shaken hands
-      // The tie-breaker mathematical standard string-comp avoids an infinite race collision!
-      if (remotePeerID && myPeerID && !connectedPeers[remotePeerID]) {
+      // ONLY connect if the player has been "Active" in the last 40 seconds
+      // This prevents the browser from freezing by trying to call 100 dead players!
+      let isAlive = pData.lastSeen && (now - pData.lastSeen < 40000);
+      
+      if (isAlive && remotePeerID && myPeerID && !connectedPeers[remotePeerID]) {
         if (myPeerID > remotePeerID) {
-          // Send them our live P5 canvas as a literal video stream at 30 FPS completely invisibly!
           if (!myCanvasStream) {
             let c = document.querySelector('canvas');
             if (c) myCanvasStream = c.captureStream(30);
@@ -66,6 +69,10 @@ db.ref('players').on('value', (snapshot) => {
             
             call.on('stream', (remoteStream) => {
               addRemoteVideo(remotePeerID, remoteStream);
+            });
+            call.on('error', (err) => {
+              console.log("Call error", err);
+              delete connectedPeers[remotePeerID];
             });
           }
         }
@@ -148,20 +155,19 @@ function initWebRTC() {
   peer = new Peer();
   peer.on('open', (id) => {
     myPeerID = id;
-    // Tell Firebase that we are 100% authentically ready to receive FaceTime video calls!
     if (myPlayerID) {
       db.ref('players/' + myPlayerID).set({ 
         peerID: myPeerID, 
         name: myPlayerName, 
         mana: 0, 
         spirit: 100,
-        choice: 'Fire'
+        choice: 'Fire',
+        lastSeen: Date.now()
       });
     }
   });
 
   peer.on('call', (call) => {
-    // We are receiving a call from another Player's browser! Pass them our P5 element stream natively.
     if (!myCanvasStream) {
       let c = document.querySelector('canvas');
       if (c) myCanvasStream = c.captureStream(30);
@@ -173,6 +179,12 @@ function initWebRTC() {
       });
     }
   });
+
+  setInterval(() => {
+    if (myPlayerID) {
+      db.ref('players/' + myPlayerID + '/lastSeen').set(Date.now());
+    }
+  }, 10000); 
 }
 
 const replicateProxy = "https://itp-ima-replicate-proxy.web.app/api/create_n_get";
@@ -351,18 +363,18 @@ function setup() {
   // This explicitly prevents iOS/mobile from silently dropping the AI detection completely!
   // Start capture with explicit constraints
   video = createCapture(VIDEO, () => {
-    console.log("Webcam Active");
     // Ensure the stream dimensions match our canvas exactly for processing
     video.size(width, height);
-    video.elt.play().catch(e => console.log("Play failed", e));
     
-    // Start tracking once stream is confirmed flowing
-    handPose = ml5.handPose(() => {
-      handPose.detectStart(video, (results) => { hands = results; });
-    });
-    bodyPose = ml5.bodyPose(() => {
-      bodyPose.detectStart(video, (results) => { poses = results; });
-    });
+    // Start tracking ONLY once the video is reliably flowing
+    if (typeof ml5 !== 'undefined') {
+      handPose = ml5.handPose(() => {
+        handPose.detectStart(video, (results) => { hands = results; });
+      });
+      bodyPose = ml5.bodyPose(() => {
+        bodyPose.detectStart(video, (results) => { poses = results; });
+      });
+    }
   });
 
   video.elt.setAttribute('playsinline', ''); 
