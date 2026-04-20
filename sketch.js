@@ -248,12 +248,18 @@ function setup() {
   inputRow.style('gap', '10px');
   inputRow.parent(controls);
 
-  // --- FAIRY NAME OPTION ---
+  // --- PHASE 1: NAMING ---
   let nameContainer = createDiv();
   nameContainer.style('display', 'flex');
   nameContainer.style('align-items', 'center');
   nameContainer.style('gap', '10px');
   nameContainer.parent(inputRow);
+
+  // --- PHASE 2: WAND CREATION ---
+  spellContainer = createDiv();
+  spellContainer.style('display', 'none'); 
+  spellContainer.style('gap', '10px');
+  spellContainer.parent(inputRow);
 
   let nameLabel = createSpan("Your Fairy Name:");
   nameLabel.style('color', '#ffbaff');
@@ -290,25 +296,25 @@ function setup() {
   nameBtn.parent(nameContainer);
   nameBtn.mousePressed(() => {
     if (currentStep === 1) {
+      console.log("Advancing to Step 2");
       nextStep(2);
-      nameBtn.hide();
-      spellContainer.style('display', 'flex');
+      nameContainer.style('display', 'none'); // Hide naming UI entirely
+      spellContainer.style('display', 'flex'); // Show wand UI
       
-      // Reveal the gallery
+      // Reveal the mirror gallery
       let gallery = document.getElementById('mirrors-gallery');
-      gallery.style.opacity = '1';
-      gallery.style.height = 'auto';
-      gallery.style.overflow = 'visible';
-      gallery.style.pointerEvents = 'all';
-      gallery.classList.add('fly-in');
+      if (gallery) {
+        gallery.style.opacity = '1';
+        gallery.style.height = 'auto';
+        gallery.style.overflow = 'visible';
+        gallery.style.pointerEvents = 'all';
+        gallery.classList.add('fly-in');
+      }
     }
   });
   // -------------------------
 
-  spellContainer = createDiv();
-  spellContainer.style('display', 'none'); // Hidden until named
-  spellContainer.style('gap', '10px');
-  spellContainer.parent(inputRow);
+  // (spellContainer already created above)
 
   let input_image_field = createInput("A crystal water flower");
   input_image_field.style('width', '100%');
