@@ -29,8 +29,7 @@ let myFairyColor; // Unique to each player
 let spiritOrbs = [];
 let fairyMana = 0;
 let spiritHealth = 100;
-let mySpellChoice = 'Solar';
-let isMegaSpell = false;
+let mySpellChoice = 'Fire';
 let combatButtons = [];
 
 // Cloud event listener for remote players
@@ -150,7 +149,7 @@ function initWebRTC() {
         name: myPlayerName, 
         mana: 0, 
         spirit: 100,
-        choice: 'Solar'
+        choice: 'Fire'
       });
     }
   });
@@ -503,7 +502,7 @@ function draw() {
       textAlign(CENTER, CENTER);
       textSize(10);
       fill(255);
-      let choice = data && data[pID] ? data[pID].choice : 'Solar';
+      let choice = data && data[pID] ? data[pID].choice : 'Fire';
       text(choice.charAt(0), 0, 0);
       pop();
     }
@@ -891,37 +890,25 @@ function nextStep(step) {
 }
 
 function setupCombatUI() {
-  let types = ['Solar', 'Lunar', 'Floral'];
+  let types = ['Fire', 'Water', 'Grass'];
   types.forEach(type => {
     let btn = createButton(type);
     btn.parent(spellContainer);
-    btn.style('padding', '10px 15px');
-    btn.style('border-radius', '10px');
+    btn.style('padding', '12px 20px');
+    btn.style('border-radius', '30px');
     btn.style('background', 'rgba(255,255,255,0.1)');
     btn.style('color', 'white');
-    btn.style('border', '1px solid white');
+    btn.style('border', '2px solid white');
     btn.style('cursor', 'pointer');
+    btn.style('font-family', 'Quicksand');
     btn.mousePressed(() => {
       mySpellChoice = type;
       if (myPlayerID) db.ref('players/' + myPlayerID + '/choice').set(mySpellChoice);
       combatButtons.forEach(b => b.style('background', 'rgba(255,255,255,0.1)'));
-      btn.style('background', 'rgba(0, 255, 255, 0.4)');
+      btn.style('background', 'rgba(255, 100, 255, 0.5)');
     });
     combatButtons.push(btn);
   });
-
-  let megaBtn = createButton("MEGA (10 Mana)");
-  megaBtn.parent(spellContainer);
-  megaBtn.style('padding', '10px 15px');
-  megaBtn.style('border-radius', '10px');
-  megaBtn.style('background', 'rgba(255, 0, 255, 0.2)');
-  megaBtn.style('color', 'white');
-  megaBtn.style('cursor', 'pointer');
-  megaBtn.mousePressed(() => {
-    isMegaSpell = !isMegaSpell;
-    megaBtn.style('background', isMegaSpell ? 'rgba(255, 0, 255, 0.6)' : 'rgba(255, 0, 255, 0.2)');
-  });
-  combatButtons.push(megaBtn);
 }
 
 function updateInstructionSteps() {
@@ -964,10 +951,9 @@ function handleSpiritOrbs() {
   }
 }
 
-// Round 2 Duel Mechanics: RPS Battle!
 function mousePressed() {
-  let cost = isMegaSpell ? 10 : 5;
-  let damage = isMegaSpell ? 35 : 15;
+  let cost = 5;
+  let damage = 20;
 
   if (currentStep === 4 && fairyMana >= cost) {
     // Check if we aimed at a remote mirror
@@ -978,33 +964,27 @@ function mousePressed() {
         let hitID = frame.id;
         for (let pID in remotePlayers) {
           if (remotePlayers[pID].peerID === hitID) {
-            let targetChoice = remotePlayers[pID].choice || 'Solar';
+            let targetChoice = remotePlayers[pID].choice || 'Fire';
             
-            // RPS RESOLUTION
+            // SIMPLIFIED RPS
             let win = false;
             let draw = false;
             if (mySpellChoice === targetChoice) draw = true;
-            else if (mySpellChoice === 'Solar' && targetChoice === 'Lunar') win = true;
-            else if (mySpellChoice === 'Lunar' && targetChoice === 'Floral') win = true;
-            else if (mySpellChoice === 'Floral' && targetChoice === 'Solar') win = true;
+            else if (mySpellChoice === 'Fire' && targetChoice === 'Grass') win = true;
+            else if (mySpellChoice === 'Grass' && targetChoice === 'Water') win = true;
+            else if (mySpellChoice === 'Water' && targetChoice === 'Fire') win = true;
 
-            // Apply logic
             if (win) {
-              let newSpirit = max(0, (remotePlayers[pID].spirit || 100) - damage);
-              db.ref('players/' + pID + '/spirit').set(newSpirit);
-              fairyMana -= cost;
+              db.ref('players/' + pID + '/spirit').set(max(0, (remotePlayers[pID].spirit || 100) - damage));
             } else if (draw) {
-              let newSpirit = max(0, (remotePlayers[pID].spirit || 100) - 5);
-              db.ref('players/' + pID + '/spirit').set(newSpirit);
+              db.ref('players/' + pID + '/spirit').set(max(0, (remotePlayers[pID].spirit || 100) - 5));
               spiritHealth = max(0, spiritHealth - 5);
-              fairyMana -= cost;
             } else {
-              // LOSE: Recoil damage!
-              spiritHealth = max(0, spiritHealth - (damage / 2));
-              fairyMana -= cost;
-              feedback.html("Spell reflected! Be careful of their element!");
+              spiritHealth = max(0, spiritHealth - damage);
+              feedback.html("You were countered! Energy backfire!");
             }
 
+            fairyMana -= cost;
             if (myPlayerID) {
               db.ref('players/' + myPlayerID + '/mana').set(fairyMana);
               db.ref('players/' + myPlayerID + '/spirit').set(spiritHealth);
@@ -1019,7 +999,6 @@ function mousePressed() {
     let pos = getObjectPosition();
     for (let i = 0; i < 30; i++) {
         let p = new Particle(pos.x, pos.y);
-        p.color = isMegaSpell ? color(255, 255, 255) : myFairyColor;
         p.vx = (mouseX - pos.x) * 0.12 + random(-3, 3);
         p.vy = (mouseY - pos.y) * 0.12 + random(-3, 3);
         particles.push(p);
