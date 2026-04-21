@@ -123,10 +123,25 @@ const sketch = (p) => {
     };
 
     p.draw = () => {
-        // Draw Realistic Background
+        // Draw Realistic Background (Cover Logic to prevent smooshing)
         let currentBg = backgroundImgs[currentRealm];
         if (currentBg) {
-            p.image(currentBg, 0, 0, p.width, p.height);
+            let canvasRatio = p.width / p.height;
+            let imgRatio = currentBg.width / currentBg.height;
+            let sw, sh, sx, sy;
+            
+            if (imgRatio > canvasRatio) {
+                sh = currentBg.height;
+                sw = currentBg.height * canvasRatio;
+                sx = (currentBg.width - sw) / 2;
+                sy = 0;
+            } else {
+                sw = currentBg.width;
+                sh = currentBg.width / canvasRatio;
+                sx = 0;
+                sy = (currentBg.height - sh) / 2;
+            }
+            p.image(currentBg, 0, 0, p.width, p.height, sx, sy, sw, sh);
         } else {
             p.background(themes[currentRealm].bg);
         }
