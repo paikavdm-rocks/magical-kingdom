@@ -247,23 +247,67 @@ const sketch = (p) => {
     window.takeSelfie = () => {
         if (!cameraReady || !bodypix || !capture) { 
             console.log("Still warming up..."); 
-            return; // Don't infinite loop with startCamera!
+            return; 
         }
         const btn = getEl('selfie-btn');
         if (btn) { btn.innerText = "CAPTURING..."; btn.style.opacity = "0.5"; }
-        // Pass capture.elt to segment just in case reparenting the DOM node messed with ml5 reading the video
-        bodypix.segment(capture.elt || capture, (error, result) => {
-            if (btn) { btn.innerText = "📸 SNAP FACE STICKER!"; btn.style.opacity = "1"; }
-            if (error) { console.error(error); return; }
-            let buff = p.createGraphics(320, 240); buff.image(capture, 0, 0); buff.loadPixels();
-            for (let i = 0; i < buff.pixels.length; i += 4) { if (result.mask.data[i/4] === 0) buff.pixels[i+3] = 0; }
-            buff.updatePixels();
-            let finalBuff = p.createGraphics(200, 200); finalBuff.translate(200, 0); finalBuff.scale(-1, 1); finalBuff.image(buff, -60, 0, 320, 240);
-            const accs = ['wings', 'crown', 'ears', 'necklace', null]; const randomAcc = accs[Math.floor(Math.random() * accs.length)];
-            const d = finalBuff.canvas.toDataURL();
-            items.push({ x: p.width / 2, y: p.height / 2, type: 'selfie', img: finalBuff.get(), dataUrl: d, accessory: randomAcc });
-            if (currentUser) addDoc(collection(db, "spirit_stickers"), { creator: currentUser.email.split('@')[0], dataUrl: d, createdAt: serverTimestamp(), accessory: randomAcc }).catch(e => console.warn("Sticker save:", e));
-        });
+        
+        try {
+            // Revert back to plain capture object
+            bodypix.segment(capture, (error, result) => {
+                if (btn) { btn.innerText = "📸 SNAP FACE STICKER!"; btn.style.opacity = "1"; }
+                
+                if (error) { 
+                    alert("ML5 AI Error: " + error); 
+                    return; 
+                }
+                
+                try {
+                    let maskData = result.raw?.data || result.mask?.data || result.segmentation?.data || result.data;
+                    
+                    if (!maskData) {
+                        alert("Error: ML5 did not return expected segmentation mask.");
+                        console.log("Result object:", result);
+                        return;
+                    }
+
+                    let buff = p.createGraphics(320, 240); 
+                    buff.image(capture, 0, 0, 320, 240); 
+                    buff.loadPixels();
+                    
+                    for (let i = 0; i < buff.pixels.length; i += 4) { 
+                        if (maskData[i/4] === 0) buff.pixels[i+3] = 0; 
+                    }
+                    buff.updatePixels();
+                    
+                    let finalBuff = p.createGraphics(200, 200); 
+                    finalBuff.translate(200, 0); 
+                    finalBuff.scale(-1, 1); 
+                    finalBuff.image(buff, -60, 0, 320, 240);
+                    
+                    const accs = ['wings', 'crown', 'ears', 'necklace', null]; 
+                    const randomAcc = accs[Math.floor(Math.random() * accs.length)];
+                    const d = finalBuff.canvas.toDataURL();
+                    
+                    items.push({ x: p.width / 2, y: p.height / 2, type: 'selfie', img: finalBuff.get(), dataUrl: d, accessory: randomAcc, scale: 1 });
+                    
+                    if (currentUser) {
+                        addDoc(collection(db, "spirit_stickers"), { 
+                            creator: currentUser.email.split('@')[0], 
+                            dataUrl: d, 
+                            createdAt: serverTimestamp(), 
+                            accessory: randomAcc 
+                        }).catch(e => console.warn("Sticker save:", e));
+                    }
+                } catch(e) {
+                    alert("Processing Error: " + e.message);
+                    console.error(e);
+                }
+            });
+        } catch (e) {
+            alert("Segment Trigger Error: " + e.message);
+            console.error(e);
+        }
     };
 
     function makeTransparent(img) {
