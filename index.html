@@ -265,48 +265,33 @@
         </div>
     </header>
 
-    <main id="app-container">
+    <main id="app-container" style="padding: 10px;">
         <div id="game-area">
-            <div id="canvas-container" style="position: relative; border: 4px solid var(--primary); box-shadow: 0 0 40px rgba(80,250,123,0.2); border-radius: 20px;">
+            <div id="canvas-container" style="position: relative; border: 4px solid var(--primary); box-shadow: 0 0 40px rgba(0,0,0,0.5); border-radius: 20px; overflow: hidden; height: 300px;">
                 <!-- Physical Take Selfie Button on top of canvas -->
-                <button id="selfie-btn" style="position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 100; padding: 15px 30px; border-radius: 50px; background: var(--primary); color: #000; font-weight: bold; border: none; cursor: pointer; box-shadow: 0 0 20px var(--primary);">
+                <button id="selfie-btn" style="position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); z-index: 100; padding: 10px 20px; border-radius: 50px; background: var(--primary); color: #000; font-weight: bold; border: none; cursor: pointer; font-size: 0.8rem;">
                     📸 TAKE SPIRIT SELFIE
                 </button>
-                <!-- p5 canvas will go here -->
             </div>
 
-            <div class="sidebar">
-                <div class="panel" style="background: rgba(0,0,0,0.4); border: 2px solid var(--primary); border-radius: 20px;">
-                    <h3 style="font-family: 'Playfair Display'; color: var(--secondary); margin-top: 0;">Magic Elements</h3>
-                    <div class="item-picker" id="item-picker">
-                        <button class="item-btn" data-type="fairy">🧚</button>
-                        <button class="item-btn" data-type="mushroom">🍄</button>
-                        <button class="item-btn" data-type="crystal">💎</button>
-                        <button class="item-btn" data-type="flower">🌸</button>
-                        <button class="item-btn" data-type="star">⭐</button>
-                        <button class="item-btn" data-type="wand">🪄</button>
-                    </div>
-
-                    <!-- Shared Sticker Bank -->
-                    <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--border);">
-                        <p style="font-size: 0.8rem; margin-bottom: 10px; color: var(--secondary); font-weight: bold;">Shared Spirit Stickers:</p>
-                        <div id="shared-stickers" style="display: flex; flex-wrap: wrap; gap: 8px; max-height: 120px; overflow-y: auto; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 15px;">
-                            <!-- Dynamically loaded stickers -->
-                        </div>
+            <div class="sidebar" style="gap: 10px;">
+                <div class="panel" style="padding: 10px; background: rgba(0,0,0,0.4); border: 2px solid var(--primary); border-radius: 15px;">
+                    <h3 style="font-family: 'Playfair Display'; color: var(--secondary); margin: 0 0 10px 0; font-size: 1rem;">Shared Spirits</h3>
+                    <div id="shared-stickers" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(35px, 1fr)); gap: 5px; max-height: 80px; overflow-y: auto; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 10px;">
+                        <!-- Dynamically loaded stickers -->
                     </div>
                 </div>
 
-                <div class="panel" style="background: rgba(0,0,0,0.4); border: 2px solid var(--accent); border-radius: 20px;">
-                    <h3 style="font-family: 'Playfair Display'; color: var(--accent); margin-top: 0;">AI Conjuring</h3>
-                    <input type="text" id="ai-prompt" placeholder="A golden rabbit..." style="width: 100%; box-sizing: border-box; padding: 10px; margin-bottom: 10px; background: rgba(255,255,255,0.1); border: 1px solid var(--accent); color: white; border-radius: 10px;">
-                    <button id="ai-btn" class="btn-primary" style="width: 100%; padding: 12px; background: var(--accent); color: #000; font-weight: bold; border-radius: 10px; border: none; cursor: pointer;">✨ CONJURE ITEM</button>
+                <div class="panel" style="padding: 10px; background: rgba(0,0,0,0.4); border: 2px solid var(--accent); border-radius: 15px;">
+                    <h3 style="font-family: 'Playfair Display'; color: var(--accent); margin: 0 0 10px 0; font-size: 1rem;">Conjurer</h3>
+                    <div style="display: flex; gap: 5px;">
+                        <input type="text" id="ai-prompt" placeholder="A key..." style="flex: 1; padding: 8px; background: rgba(255,255,255,0.1); border: 1px solid var(--accent); color: white; border-radius: 8px; font-size: 0.8rem;">
+                        <button id="ai-btn" style="padding: 8px 12px; background: var(--accent); color: #000; font-weight: bold; border-radius: 8px; border: none; cursor: pointer; font-size: 0.8rem;">✨</button>
+                    </div>
                 </div>
 
-                <div class="panel" style="background: rgba(0,0,0,0.4); border: 2px solid var(--primary); border-radius: 20px;">
-                    <h3 style="font-family: 'Playfair Display'; color: var(--secondary); margin-top: 0;">Lore</h3>
-                    <textarea id="scene-description" style="width:100%; box-sizing: border-box; height:60px; background:rgba(0,0,0,0.3); color:white; border-radius:10px; border:1px solid var(--border); padding:10px; font-family:inherit;" placeholder="Describe the ancient magic..."></textarea>
-                    <button class="btn-primary" id="save-btn" style="width:100%; margin-top: 10px; padding: 15px; background: var(--primary); color: #000; font-weight: bold; border-radius: 10px; border: none; cursor: pointer;">COMMIT TO ETERNITY</button>
-                    <button id="clear-btn" style="width: 100%; background: none; border: none; color: #ff5555; font-size: 0.7rem; margin-top: 5px; cursor: pointer;">[ VANISH ALL MAGIC ]</button>
+                <div class="panel" style="padding: 10px; background: rgba(0,0,0,0.4); border: 2px solid var(--primary); border-radius: 15px;">
+                    <button class="btn-primary" id="save-btn" style="width:100%; padding: 12px; background: var(--primary); color: #000; font-weight: bold; border-radius: 8px; border: none; cursor: pointer; font-size: 0.9rem;">COMMIT TO ETERNITY</button>
                 </div>
             </div>
         </div>

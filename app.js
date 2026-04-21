@@ -112,7 +112,7 @@ const sketch = (p) => {
 
     p.setup = () => {
         const container = document.getElementById('canvas-container');
-        const canvas = p.createCanvas(container.offsetWidth, 400); // SHRUNK CANVAS
+        const canvas = p.createCanvas(container.offsetWidth, 300); // RECOMPACT CANVAS
         canvas.parent(container);
         
         capture = p.createCapture(p.VIDEO);
@@ -220,7 +220,7 @@ const sketch = (p) => {
         img.updatePixels();
     }
     
-    p.windowResized = () => p.resizeCanvas(document.getElementById('canvas-container').offsetWidth, 400);
+    p.windowResized = () => p.resizeCanvas(document.getElementById('canvas-container').offsetWidth, 300);
 };
 
 const myP5 = new p5(sketch);
