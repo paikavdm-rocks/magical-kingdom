@@ -7,6 +7,7 @@
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Inter:wght@400;700&family=Caveat:wght@600&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.js"></script>
+    <script src="https://unpkg.com/ml5@latest/dist/ml5.min.js"></script>
     <style>
         :root {
             --primary: #50fa7b; /* Neon Green */
@@ -219,6 +220,10 @@
         .hidden {
             display: none !important;
         }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
@@ -295,15 +300,23 @@
                 </div>
 
                 <div class="panel" style="background: rgba(0,0,0,0.5); border: 2px solid var(--accent); border-radius: 20px;">
-                    <h3 style="font-family: 'Playfair Display'; color: var(--accent); margin-top: 0;">AI Conjurer</h3>
-                    <input type="text" id="ai-prompt" placeholder="Describe your item..." style="width: 100%; box-sizing: border-box; padding: 12px; margin-bottom: 12px; background: rgba(255,255,255,0.1); border: 1px solid var(--accent); color: white; border-radius: 10px;">
-                    <button id="ai-btn" class="btn-primary" style="width: 100%; padding: 15px; background: var(--accent); color: #000; font-weight: bold; border-radius: 10px; border: none; cursor: pointer;">✨ CONJURE MAGIC</button>
+                    <h3 style="font-family: 'Playfair Display'; color: var(--accent); margin-top: 0;">Conjurer</h3>
+                    <div style="display: flex; gap: 5px; margin-bottom: 15px;">
+                        <input type="text" id="ai-prompt" placeholder="A dragon key..." style="flex: 1; padding: 12px; background: rgba(255,255,255,0.1); border: 1px solid var(--accent); color: white; border-radius: 10px; font-size: 0.9rem;">
+                        <button id="ai-btn" style="padding: 12px 20px; background: var(--accent); color: #000; font-weight: bold; border-radius: 10px; border: none; cursor: pointer;">✨</button>
+                    </div>
+
+                    <div style="padding-top: 10px; border-top: 1px solid var(--border);">
+                        <p style="font-size: 0.75rem; margin-bottom: 8px; color: var(--accent); font-weight: bold; text-transform: uppercase;">Your Conjured Items:</p>
+                        <div id="ai-creations" style="display: flex; flex-wrap: wrap; gap: 8px; min-height: 50px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 15px;">
+                            <span style="font-size: 0.7rem; opacity: 0.4;">Speak to the void to conjure...</span>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="panel" style="background: rgba(0,0,0,0.5); border: 2px solid var(--primary); border-radius: 20px;">
-                    <h3 style="font-family: 'Playfair Display'; color: var(--secondary); margin-top: 0;">Lore</h3>
-                    <textarea id="scene-description" style="width: 100%; box-sizing: border-box; height: 80px; background: rgba(0,0,0,0.3); color: white; border-radius: 10px; border: 1px solid var(--border); padding: 12px; font-family: inherit; margin-bottom: 10px;" placeholder="Record your story..."></textarea>
-                    <button class="btn-primary" id="save-btn" style="width: 100%; padding: 15px; background: var(--primary); color: #000; font-weight: bold; border-radius: 10px; border: none; cursor: pointer;">COMMIT TO ETERNITY</button>
+                    <button class="btn-primary" id="save-btn" style="width: 100%; padding: 18px; background: var(--primary); color: #000; font-weight: bold; border-radius: 12px; border: none; cursor: pointer; font-size: 1rem; box-shadow: 0 0 15px var(--primary);">COMMIT TO ETERNITY</button>
+                    <button id="clear-btn" style="width: 100%; background: none; border: none; color: #ff5555; font-size: 0.7rem; margin-top: 10px; cursor: pointer;">[ VANISH ALL MAGIC ]</button>
                 </div>
             </div>
         </div>

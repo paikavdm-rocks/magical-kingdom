@@ -52,13 +52,14 @@ const passwordInput = document.getElementById('password');
 const userInfo = document.getElementById('user-info');
 const userDisplay = document.getElementById('user-display');
 const saveBtn = document.getElementById('save-btn');
-const descriptionInput = document.getElementById('scene-description');
+const clearBtn = document.getElementById('clear-btn');
 const sceneGallery = document.getElementById('scene-gallery');
 const itemPicker = document.getElementById('item-picker');
 const sharedStickerContainer = document.getElementById('shared-stickers');
 const selfieBtn = document.getElementById('selfie-btn');
 const aiBtn = document.getElementById('ai-btn');
 const aiPrompt = document.getElementById('ai-prompt');
+const aiCreationsBank = document.getElementById('ai-creations');
 
 // Theme Switcher
 realmBtns.forEach(btn => {
@@ -81,39 +82,35 @@ function applyTheme(realm) {
     document.body.style.background = `radial-gradient(circle at center, ${theme.bg} 0%, #000 100%)`;
 }
 
-// Item Picker Logic
+// Item Picker
 const itemBtns = document.querySelectorAll('.item-btn');
 itemPicker.addEventListener('click', (e) => {
     const btn = e.target.closest('.item-btn');
     if (!btn) return;
-    itemBtns.forEach(b => {
-        b.style.background = 'rgba(255,255,255,0.1)';
-        b.classList.remove('active');
-    });
+    itemBtns.forEach(b => b.style.background = 'rgba(255,255,255,0.1)');
     btn.style.background = 'var(--primary)';
-    btn.classList.add('active');
     selectedType = btn.dataset.type;
 });
 
-// Auth Handlers
+// Auth
 loginBtn.onclick = async () => { try { await signInWithEmailAndPassword(auth, emailInput.value, passwordInput.value); } catch (e) { alert(e.message); } };
 signupBtn.onclick = async () => { try { await createUserWithEmailAndPassword(auth, emailInput.value, passwordInput.value); } catch (e) { alert(e.message); } };
 onAuthStateChanged(auth, (user) => {
     if (user) {
         currentUser = user; authOverlay.classList.add('hidden'); userInfo.classList.remove('hidden');
-        userDisplay.innerText = `Noble ${user.email.split('@')[0]}`;
+        userDisplay.innerText = `Elder ${user.email.split('@')[0]}`;
         loadGallery(); listenToSharedStickers();
     } else {
         currentUser = null; authOverlay.classList.remove('hidden'); userInfo.classList.add('hidden');
     }
 });
-window.logout = () => signOut(auth);
 
-// --- P5.JS REALISTIC ENGINE ---
+// --- P5.JS & ML5 ENGINE ---
 let items = [];
 let draggingItem = null;
 let capture;
 let backgroundImgs = {};
+let bodypix;
 
 const sketch = (p) => {
     p.preload = () => {
@@ -125,11 +122,15 @@ const sketch = (p) => {
 
     p.setup = () => {
         const container = document.getElementById('canvas-container');
-        const canvas = p.createCanvas(container.offsetWidth, 500); // TALLER CANVAS
+        const canvas = p.createCanvas(container.offsetWidth, 500);
         canvas.parent(container);
         capture = p.createCapture(p.VIDEO);
         capture.size(320, 240);
         capture.hide();
+        
+        // ML5 BodyPix for background removal
+        bodypix = ml5.bodyPix(capture, { multiplier: 0.75, outputStride: 16, segmentationThreshold: 0.5 }, () => console.log('BodyPix Loaded!'));
+        
         applyTheme(currentRealm);
     };
 
@@ -142,22 +143,17 @@ const sketch = (p) => {
             if (imgRatio > canvasRatio) { sh = currentBg.height; sw = currentBg.height * canvasRatio; sx = (currentBg.width - sw) / 2; sy = 0; }
             else { sw = currentBg.width; sh = currentBg.width / canvasRatio; sx = 0; sy = (currentBg.height - sh) / 2; }
             p.image(currentBg, 0, 0, p.width, p.height, sx, sy, sw, sh);
-        } else {
-            p.background(themes[currentRealm].bg);
-        }
+        } else p.background(themes[currentRealm].bg);
         
         items.forEach(item => {
-            p.push();
-            p.translate(item.x, item.y);
+            p.push(); p.translate(item.x, item.y);
             if (p.dist(p.mouseX, p.mouseY, item.x, item.y) < 50) p.scale(1.1);
-
             if (item.type === 'selfie' || item.type === 'ai') {
                 p.imageMode(p.CENTER);
                 if (item.img) p.image(item.img, 0, 0, 100, 100);
                 else if (item.dataUrl) item.img = p.loadImage(item.dataUrl, (loaded) => makeTransparent(loaded));
             } else {
-                p.textAlign(p.CENTER, p.CENTER);
-                p.textSize(50);
+                p.textAlign(p.CENTER, p.CENTER); p.textSize(50);
                 p.text(getEmoji(item.type), 0, 0);
             }
             p.pop();
@@ -185,16 +181,28 @@ const sketch = (p) => {
     };
 
     window.takeSelfie = () => {
-        let buff = p.createGraphics(200, 200);
-        buff.translate(200, 0); buff.scale(-1, 1);
-        buff.image(capture, 0, 0, 260, 200);
-        let mask = p.createGraphics(200, 200);
-        mask.ellipse(100, 100, 200, 200);
-        let finalImg = buff.get();
-        finalImg.mask(mask.get());
-        const d = finalImg.canvas.toDataURL();
-        items.push({ x: p.width / 2, y: p.height / 2, type: 'selfie', img: finalImg, dataUrl: d });
-        if (currentUser) addDoc(collection(db, "spirit_stickers"), { creator: currentUser.email.split('@')[0], dataUrl: d, createdAt: serverTimestamp() });
+        if (!bodypix) return alert("Mirror still warming up!");
+        bodypix.segment(capture, (error, result) => {
+            if (error) return console.log(error);
+            
+            // Draw person to buffer with transparency
+            let buff = p.createGraphics(320, 240);
+            buff.image(capture, 0, 0);
+            buff.loadPixels();
+            for (let i = 0; i < buff.pixels.length; i += 4) {
+               if (result.mask.data[i/4] === 0) buff.pixels[i+3] = 0; // Transparent background
+            }
+            buff.updatePixels();
+            
+            // Mirror and crop to face
+            let finalBuff = p.createGraphics(200, 200);
+            finalBuff.translate(200, 0); finalBuff.scale(-1, 1);
+            finalBuff.image(buff, -60, 0, 320, 240);
+            
+            const d = finalBuff.canvas.toDataURL();
+            items.push({ x: p.width / 2, y: p.height / 2, type: 'selfie', img: finalBuff.get(), dataUrl: d });
+            if (currentUser) addDoc(collection(db, "spirit_stickers"), { creator: currentUser.email.split('@')[0], dataUrl: d, createdAt: serverTimestamp() });
+        });
     };
 
     function makeTransparent(img) {
@@ -209,21 +217,40 @@ const sketch = (p) => {
 
 const myP5 = new p5(sketch);
 
-// UI Listeners
+// --- UI LISTENERS ---
 selfieBtn.onclick = () => window.takeSelfie();
+
 aiBtn.onclick = async () => {
-    const pr = aiPrompt.value; if (!pr) return alert("Prompt needed!");
-    aiBtn.innerText = "CONJURING...";
+    const pr = aiPrompt.value; if (!pr) return;
+    
+    // Create "Making..." indicator
+    const loader = document.createElement('div');
+    loader.className = 'ai-loader';
+    loader.innerHTML = "🔮";
+    loader.style = "width:50px; height:50px; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.1); border-radius:50%; animation: spin 2s linear infinite;";
+    if (aiCreationsBank.children[0] && aiCreationsBank.children[0].tagName === 'SPAN') aiCreationsBank.innerHTML = "";
+    aiCreationsBank.appendChild(loader);
+    
     try {
         const res = await fetch("https://itp-ima-replicate-proxy.web.app/api/create_n_get", {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ model: "google/nano-banana", input: { prompt: `A standalone, isolated magical item: ${pr}. Detailed fantasy, cinematic, isolated on pure white background.` } })
+            body: JSON.stringify({ model: "google/nano-banana", input: { prompt: `A standalone, isolated magical item: ${pr}. Detailed fantasy, cinematic, white background.` } })
         });
         const d = await res.json();
         const url = Array.isArray(d.output) ? d.output[0] : d.output;
-        if (url) window.addSticker(url, 'ai'); else throw new Error("Silent void");
-    } catch (e) { alert("Error: " + e.message); }
-    finally { aiBtn.innerText = "✨ CONJURE ITEM"; }
+        
+        if (url) {
+            loader.remove();
+            const btn = document.createElement('img');
+            btn.src = url;
+            btn.style = "width:50px; height:50px; border-radius:10px; cursor:pointer; border:2px solid var(--accent); background:white;";
+            btn.onclick = () => window.addSticker(url, 'ai');
+            aiCreationsBank.appendChild(btn);
+        } else throw new Error("Silent void");
+    } catch (e) { 
+        loader.innerHTML = "❌";
+        setTimeout(() => loader.remove(), 2000);
+    }
 };
 
 function listenToSharedStickers() {
@@ -244,20 +271,20 @@ saveBtn.onclick = async () => {
     try {
         await addDoc(collection(db, "scenes"), {
             uid: currentUser.uid, creator: currentUser.email.split('@')[0], realm: currentRealm,
-            description: descriptionInput.value || "", arrangement: items.map(i => ({ x: i.x, y: i.y, type: i.type, dataUrl: i.dataUrl || null })),
+            arrangement: items.map(i => ({ x: i.x, y: i.y, type: i.type, dataUrl: i.dataUrl || null })),
             createdAt: serverTimestamp()
-        }); alert("Lore committed.");
+        }); alert("Recorded!");
     } catch (e) { alert(e.message); }
     saveBtn.innerText = "COMMIT TO ETERNITY";
 };
 
 function loadGallery() {
-    onSnapshot(query(collection(db, "scenes"), orderBy("createdAt", "desc"), limit(10)), (sn) => {
+    onSnapshot(query(collection(db, "scenes"), orderBy("createdAt", "desc"), limit(5)), (sn) => {
         sceneGallery.innerHTML = "";
         sn.forEach(doc => {
             const d = doc.data(); const card = document.createElement('div');
             card.className = 'scene-card'; card.style.borderColor = themes[d.realm || 'emerald'].primary;
-            card.innerHTML = `<h3>${d.creator}'s ${d.realm || 'emerald'}</h3><p>"${d.description}"</p>`;
+            card.innerHTML = `<h3>${d.creator}'s ${d.realm || 'emerald'}</h3>`;
             card.onclick = () => {
                 currentRealm = d.realm || 'emerald'; applyTheme(currentRealm);
                 items = d.arrangement.map(i => ({ ...i, img: i.dataUrl ? myP5.loadImage(i.dataUrl) : null }));
