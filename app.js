@@ -127,10 +127,7 @@ const sketch = (p) => {
         capture = p.createCapture(p.VIDEO);
         capture.size(320, 240);
         capture.hide();
-        
-        // ML5 BodyPix for background removal
-        bodypix = ml5.bodyPix(capture, { multiplier: 0.75, outputStride: 16, segmentationThreshold: 0.5 }, () => console.log('BodyPix Loaded!'));
-        
+        bodypix = ml5.bodyPix(capture, { multiplier: 0.75, outputStride: 16, segmentationThreshold: 0.5 }, () => console.log('BodyPix Ready'));
         applyTheme(currentRealm);
     };
 
@@ -146,12 +143,29 @@ const sketch = (p) => {
         } else p.background(themes[currentRealm].bg);
         
         items.forEach(item => {
-            p.push(); p.translate(item.x, item.y);
+            p.push();
+            p.translate(item.x, item.y);
             if (p.dist(p.mouseX, p.mouseY, item.x, item.y) < 50) p.scale(1.1);
+            
             if (item.type === 'selfie' || item.type === 'ai') {
                 p.imageMode(p.CENTER);
-                if (item.img) p.image(item.img, 0, 0, 100, 100);
-                else if (item.dataUrl) item.img = p.loadImage(item.dataUrl, (loaded) => makeTransparent(loaded));
+                if (item.img) {
+                    // Start of decorative logic
+                    if (item.type === 'selfie' && item.accessory) {
+                        p.push();
+                        p.textAlign(p.CENTER, p.CENTER);
+                        if (item.accessory === 'wings') { p.textSize(120); p.text('🦋', 0, 0); }
+                        p.image(item.img, 0, 0, 100, 100);
+                        if (item.accessory === 'crown') { p.textSize(60); p.text('👑', 0, -55); }
+                        if (item.accessory === 'necklace') { p.textSize(40); p.text('📿', 0, 45); }
+                        if (item.accessory === 'ears') { p.textSize(40); p.text('✨', -45, -30); p.text('✨', 45, -30); }
+                        p.pop();
+                    } else {
+                        p.image(item.img, 0, 0, 100, 100);
+                    }
+                } else if (item.dataUrl) {
+                    item.img = p.loadImage(item.dataUrl, (loaded) => makeTransparent(loaded));
+                }
             } else {
                 p.textAlign(p.CENTER, p.CENTER); p.textSize(50);
                 p.text(getEmoji(item.type), 0, 0);
@@ -173,35 +187,32 @@ const sketch = (p) => {
     p.mouseReleased = () => { draggingItem = null; };
     p.keyPressed = () => { if (p.keyCode === p.DELETE || p.keyCode === p.BACKSPACE) items = items.filter(i => p.dist(p.mouseX, p.mouseY, i.x, i.y) > 50); };
 
-    window.addSticker = (url, type) => {
+    window.addSticker = (url, type, acc = null) => {
         p.loadImage(url, (img) => {
             makeTransparent(img);
-            items.push({ x: p.width / 2, y: p.height / 2, type: type, img: img, dataUrl: img.canvas?.toDataURL() || url });
+            items.push({ x: p.width / 2, y: p.height / 2, type: type, img: img, dataUrl: img.canvas?.toDataURL() || url, accessory: acc });
         });
     };
 
     window.takeSelfie = () => {
-        if (!bodypix) return alert("Mirror still warming up!");
+        if (!bodypix) return alert("Mirror warming up!");
         bodypix.segment(capture, (error, result) => {
-            if (error) return console.log(error);
-            
-            // Draw person to buffer with transparency
+            if (error) return;
             let buff = p.createGraphics(320, 240);
-            buff.image(capture, 0, 0);
-            buff.loadPixels();
-            for (let i = 0; i < buff.pixels.length; i += 4) {
-               if (result.mask.data[i/4] === 0) buff.pixels[i+3] = 0; // Transparent background
-            }
+            buff.image(capture, 0, 0); buff.loadPixels();
+            for (let i = 0; i < buff.pixels.length; i += 4) { if (result.mask.data[i/4] === 0) buff.pixels[i+3] = 0; }
             buff.updatePixels();
             
-            // Mirror and crop to face
             let finalBuff = p.createGraphics(200, 200);
             finalBuff.translate(200, 0); finalBuff.scale(-1, 1);
             finalBuff.image(buff, -60, 0, 320, 240);
             
+            const accs = ['wings', 'crown', 'ears', 'necklace', null];
+            const randomAcc = accs[Math.floor(Math.random() * accs.length)];
+            
             const d = finalBuff.canvas.toDataURL();
-            items.push({ x: p.width / 2, y: p.height / 2, type: 'selfie', img: finalBuff.get(), dataUrl: d });
-            if (currentUser) addDoc(collection(db, "spirit_stickers"), { creator: currentUser.email.split('@')[0], dataUrl: d, createdAt: serverTimestamp() });
+            items.push({ x: p.width / 2, y: p.height / 2, type: 'selfie', img: finalBuff.get(), dataUrl: d, accessory: randomAcc });
+            if (currentUser) addDoc(collection(db, "spirit_stickers"), { creator: currentUser.email.split('@')[0], dataUrl: d, createdAt: serverTimestamp(), accessory: randomAcc });
         });
     };
 
@@ -219,38 +230,21 @@ const myP5 = new p5(sketch);
 
 // --- UI LISTENERS ---
 selfieBtn.onclick = () => window.takeSelfie();
-
 aiBtn.onclick = async () => {
     const pr = aiPrompt.value; if (!pr) return;
-    
-    // Create "Making..." indicator
     const loader = document.createElement('div');
-    loader.className = 'ai-loader';
-    loader.innerHTML = "🔮";
-    loader.style = "width:50px; height:50px; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.1); border-radius:50%; animation: spin 2s linear infinite;";
+    loader.innerHTML = "🔮"; loader.style = "width:50px; height:50px; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.1); border-radius:50%; animation: spin 2s linear infinite;";
     if (aiCreationsBank.children[0] && aiCreationsBank.children[0].tagName === 'SPAN') aiCreationsBank.innerHTML = "";
     aiCreationsBank.appendChild(loader);
-    
     try {
         const res = await fetch("https://itp-ima-replicate-proxy.web.app/api/create_n_get", {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ model: "google/nano-banana", input: { prompt: `A standalone, isolated magical item: ${pr}. Detailed fantasy, cinematic, white background.` } })
+            body: JSON.stringify({ model: "google/nano-banana", input: { prompt: `Isolated magical item: ${pr}. White background.` } })
         });
         const d = await res.json();
         const url = Array.isArray(d.output) ? d.output[0] : d.output;
-        
-        if (url) {
-            loader.remove();
-            const btn = document.createElement('img');
-            btn.src = url;
-            btn.style = "width:50px; height:50px; border-radius:10px; cursor:pointer; border:2px solid var(--accent); background:white;";
-            btn.onclick = () => window.addSticker(url, 'ai');
-            aiCreationsBank.appendChild(btn);
-        } else throw new Error("Silent void");
-    } catch (e) { 
-        loader.innerHTML = "❌";
-        setTimeout(() => loader.remove(), 2000);
-    }
+        if (url) { loader.remove(); const img = document.createElement('img'); img.src = url; img.style = "width:50px; height:50px; border-radius:10px; cursor:pointer; background:white;"; img.onclick = () => window.addSticker(url, 'ai'); aiCreationsBank.appendChild(img); }
+    } catch (e) { loader.innerHTML = "❌"; setTimeout(() => loader.remove(), 2000); }
 };
 
 function listenToSharedStickers() {
@@ -259,7 +253,7 @@ function listenToSharedStickers() {
         sn.forEach(doc => {
             const d = doc.data(); const img = document.createElement('img');
             img.src = d.dataUrl; img.style = "width:50px; height:50px; border-radius:50%; cursor:pointer; border:2px solid var(--primary); margin:5px; object-fit: cover;";
-            img.onclick = () => window.addSticker(d.dataUrl, 'selfie');
+            img.onclick = () => window.addSticker(d.dataUrl, 'selfie', d.accessory);
             sharedStickerContainer.appendChild(img);
         });
     });
@@ -271,7 +265,7 @@ saveBtn.onclick = async () => {
     try {
         await addDoc(collection(db, "scenes"), {
             uid: currentUser.uid, creator: currentUser.email.split('@')[0], realm: currentRealm,
-            arrangement: items.map(i => ({ x: i.x, y: i.y, type: i.type, dataUrl: i.dataUrl || null })),
+            arrangement: items.map(i => ({ x: i.x, y: i.y, type: i.type, dataUrl: i.dataUrl || null, accessory: i.accessory || null })),
             createdAt: serverTimestamp()
         }); alert("Recorded!");
     } catch (e) { alert(e.message); }
