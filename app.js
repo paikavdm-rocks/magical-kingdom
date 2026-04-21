@@ -66,6 +66,11 @@ let backgroundImgs = {};
 let bodypix;
 let cameraStarted = false;
 let cameraReady = false;
+let handpose;
+let handCapture;
+let fairyDustMode = false;
+let fairyParticles = [];
+let currentHand = null;
 
 const sketch = (p) => {
     p.preload = () => {
@@ -95,6 +100,33 @@ const sketch = (p) => {
             else { sw = currentBg.width; sh = currentBg.width / canvasRatio; sx = 0; sy = (currentBg.height - sh) / 2; }
             p.image(currentBg, 0, 0, p.width, p.height, sx, sy, sw, sh);
         }
+        // Fairy dust particles
+        if (fairyDustMode && currentHand) {
+            const kps = currentHand.landmarks;
+            // Landmark 8 = index fingertip
+            const tip = kps[8];
+            // HandPose coords are relative to the handCapture video size; map to canvas
+            const hx = p.map(tip[0], 0, handCapture.width, p.width, 0); // mirror
+            const hy = p.map(tip[1], 0, handCapture.height, 0, p.height);
+            // Spawn sparkles
+            const sparks = ['✨','⭐','💫','🌟','❄️'];
+            if (p.frameCount % 3 === 0) {
+                fairyParticles.push({ x: hx, y: hy, life: 1.0, size: p.random(20, 50), spark: sparks[Math.floor(p.random(sparks.length))] });
+            }
+        }
+        // Draw & age fairy dust particles
+        for (let i = fairyParticles.length - 1; i >= 0; i--) {
+            const pt = fairyParticles[i];
+            p.push(); p.textAlign(p.CENTER, p.CENTER);
+            p.textSize(pt.size * pt.life);
+            p.drawingContext.globalAlpha = pt.life;
+            p.text(pt.spark, pt.x, pt.y);
+            p.drawingContext.globalAlpha = 1.0;
+            p.pop();
+            pt.life -= 0.025;
+            if (pt.life <= 0) fairyParticles.splice(i, 1);
+        }
+
         items.forEach(item => {
             p.push(); p.translate(item.x, item.y);
             if (p.dist(p.mouseX, p.mouseY, item.x, item.y) < 50) p.scale(1.1);
@@ -174,12 +206,40 @@ const sketch = (p) => {
         img.updatePixels();
     }
     p.windowResized = () => { const container = getEl('canvas-container'); if (container && container.offsetWidth > 0) p.resizeCanvas(container.offsetWidth, 550); };
+
+    window.toggleFairyDust = () => {
+        fairyDustMode = !fairyDustMode;
+        const btn = getEl('fairy-dust-btn');
+        if (fairyDustMode) {
+            btn.innerText = 'LOADING HAND TRACKER...'; btn.style.opacity = '0.5';
+            if (!handCapture) {
+                handCapture = p.createCapture(p.VIDEO, () => {
+                    handCapture.size(320, 240); handCapture.hide();
+                    handpose = ml5.handpose(handCapture, { flipHorizontal: true }, () => {
+                        btn.innerText = '🖐️ FAIRY DUST ON — WAVE!'; btn.style.opacity = '1';
+                        btn.style.background = 'linear-gradient(135deg, #ff79c6, #50fa7b)';
+                        handpose.on('predict', (results) => { currentHand = results.length > 0 ? results[0] : null; });
+                    });
+                });
+            } else {
+                btn.innerText = '🖐️ FAIRY DUST ON — WAVE!'; btn.style.opacity = '1';
+                btn.style.background = 'linear-gradient(135deg, #ff79c6, #50fa7b)';
+            }
+        } else {
+            currentHand = null;
+            btn.innerText = 'ACTIVATE FAIRY DUST ✨'; btn.style.opacity = '1';
+            btn.style.background = 'linear-gradient(135deg, #bd93f9, #ff79c6)';
+        }
+    };
 };
 const myP5 = new p5(sketch);
 
 // --- UI LISTENERS ---
 function initUIListeners() {
-    document.body.addEventListener('click', (e) => { if (e.target.id === 'selfie-btn' || e.target.closest('#selfie-btn')) window.startCamera(); });
+    document.body.addEventListener('click', (e) => {
+        if (e.target.id === 'selfie-btn' || e.target.closest('#selfie-btn')) window.startCamera();
+        if (e.target.id === 'fairy-dust-btn' || e.target.closest('#fairy-dust-btn')) window.toggleFairyDust();
+    });
 
     const aiBtn = getEl('ai-btn');
     if (aiBtn) aiBtn.onclick = async () => {
