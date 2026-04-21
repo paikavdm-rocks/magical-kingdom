@@ -286,12 +286,15 @@ function initUIListeners() {
     }
 
     const realmBtns = document.querySelectorAll('.realm-btn');
+    const realmNames = { emerald: 'The Emerald Kingdom', ruby: 'The Ruby Kingdom', jade: 'The Jade Kingdom', amethyst: 'The Amethyst Kingdom' };
     realmBtns.forEach(btn => {
         btn.onclick = () => {
-            realmBtns.forEach(b => b.style.borderColor = 'transparent');
-            btn.style.borderColor = 'white';
+            realmBtns.forEach(b => b.style.border = '1px solid transparent');
+            btn.style.border = '3px solid white';
             currentRealm = btn.dataset.realm;
             applyTheme(currentRealm);
+            const nameEl = getEl('selected-realm-name');
+            if (nameEl) { nameEl.innerText = realmNames[currentRealm]; nameEl.style.color = themes[currentRealm].primary; }
         };
     });
 
