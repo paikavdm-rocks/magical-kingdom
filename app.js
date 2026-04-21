@@ -61,6 +61,8 @@ function applyTheme(realm) {
 // --- P5.JS & ML5 ENGINE ---
 let items = [];
 let draggingItem = null;
+let chargingItem = null;
+let chargeStartTime = 0;
 let capture;
 let backgroundImgs = {};
 let bodypix;
@@ -145,33 +147,67 @@ const sketch = (p) => {
             if (p.dist(p.mouseX, p.mouseY, item.x, item.y) < 50) p.scale(1.1);
             if (item.type === 'selfie' || item.type === 'ai') {
                 p.imageMode(p.CENTER);
+                const s = 100 * (item.scale || 1);
                 if (item.img) {
                     if (item.type === 'selfie' && item.accessory) {
                         p.push(); p.textAlign(p.CENTER, p.CENTER);
-                        if (item.accessory === 'wings') { p.textSize(120); p.text('🦋', 0, 0); }
-                        p.image(item.img, 0, 0, 100, 100);
-                        if (item.accessory === 'crown') { p.textSize(60); p.text('👑', 0, -55); }
-                        if (item.accessory === 'necklace') { p.textSize(40); p.text('📿', 0, 45); }
-                        if (item.accessory === 'ears') { p.textSize(40); p.text('✨', -45, -30); p.text('✨', 45, -30); }
+                        if (item.accessory === 'wings') { p.textSize(1.2 * s); p.text('🦋', 0, 0); }
+                        p.image(item.img, 0, 0, s, s);
+                        if (item.accessory === 'crown') { p.textSize(0.6 * s); p.text('👑', 0, -0.55 * s); }
+                        if (item.accessory === 'necklace') { p.textSize(0.4 * s); p.text('📿', 0, 0.45 * s); }
+                        if (item.accessory === 'ears') { p.textSize(0.4 * s); p.text('✨', -0.45 * s, -0.3 * s); p.text('✨', 0.45 * s, -0.3 * s); }
                         p.pop();
-                    } else p.image(item.img, 0, 0, 100, 100);
+                    } else p.image(item.img, 0, 0, s, s);
                 } else if (item.dataUrl) item.img = p.loadImage(item.dataUrl, (loaded) => makeTransparent(loaded));
             } else {
-                p.textAlign(p.CENTER, p.CENTER); p.textSize(50);
+                p.textAlign(p.CENTER, p.CENTER); p.textSize(50 * (item.scale || 1));
                 p.text(getEmoji(item.type), 0, 0);
             }
             p.pop();
         });
+
+        // Draw charging ring
+        if (chargingItem && !draggingItem) {
+            const holdTime = p.millis() - chargeStartTime;
+            const chargeScale = p.constrain(p.map(holdTime, 0, 2000, 1, 4), 1, 4);
+            p.push();
+            p.noFill();
+            p.stroke(themes[currentRealm].primary);
+            p.strokeWeight(4);
+            p.translate(chargingItem.x, chargingItem.y);
+            // Spin ring
+            p.rotate(p.frameCount * 0.1);
+            p.arc(0, 0, 60 * chargeScale, 60 * chargeScale, 0, p.PI * 1.5);
+            p.pop();
+        }
     };
 
     p.mousePressed = () => {
         if (p.mouseX < 0 || p.mouseX > p.width || p.mouseY < 0 || p.mouseY > p.height) return;
         let f = false;
-        for (let i = items.length - 1; i >= 0; i--) { if (p.dist(p.mouseX, p.mouseY, items[i].x, items[i].y) < 50) { draggingItem = items[i]; f = true; break; } }
-        if (!f) items.push({ x: p.mouseX, y: p.mouseY, type: selectedType });
+        // Check for dragging first
+        for (let i = items.length - 1; i >= 0; i--) { 
+            const s = items[i].scale || 1;
+            if (p.dist(p.mouseX, p.mouseY, items[i].x, items[i].y) < 50 * s) { 
+                draggingItem = items[i]; f = true; break; 
+            } 
+        }
+        if (!f) {
+            // Start charging new item
+            chargingItem = { x: p.mouseX, y: p.mouseY, type: selectedType };
+            chargeStartTime = p.millis();
+        }
     };
     p.mouseDragged = () => { if (draggingItem) { draggingItem.x = p.mouseX; draggingItem.y = p.mouseY; } };
-    p.mouseReleased = () => { draggingItem = null; };
+    p.mouseReleased = () => { 
+        if (chargingItem && !draggingItem) {
+            const holdTime = p.millis() - chargeStartTime;
+            const finalScale = p.constrain(p.map(holdTime, 0, 2000, 1, 4), 1, 4);
+            items.push({ x: chargingItem.x, y: chargingItem.y, type: chargingItem.type, scale: finalScale });
+        }
+        chargingItem = null;
+        draggingItem = null; 
+    };
     p.keyPressed = () => { if (p.keyCode === p.DELETE || p.keyCode === p.BACKSPACE) items = items.filter(i => p.dist(p.mouseX, p.mouseY, i.x, i.y) > 50); };
 
     window.addSticker = (url, type, acc = null) => {
