@@ -93,12 +93,8 @@ const sketch = (p) => {
         let currentBg = backgroundImgs[currentRealm];
         p.background(themes[currentRealm].bg);
         if (currentBg && currentBg.width > 1) {
-            let canvasRatio = p.width / p.height;
-            let imgRatio = currentBg.width / currentBg.height;
-            let sw, sh, sx, sy;
-            if (imgRatio > canvasRatio) { sh = currentBg.height; sw = currentBg.height * canvasRatio; sx = (currentBg.width - sw) / 2; sy = 0; }
-            else { sw = currentBg.width; sh = currentBg.width / canvasRatio; sx = 0; sy = (currentBg.height - sh) / 2; }
-            p.image(currentBg, 0, 0, p.width, p.height, sx, sy, sw, sh);
+            // Show full image stretched to fill canvas
+            p.image(currentBg, 0, 0, p.width, p.height);
         }
         // Fairy dust particles
         if (fairyDustMode && currentHand) {
@@ -106,21 +102,23 @@ const sketch = (p) => {
             const tip = kps[8]; // index fingertip
             const hx = p.map(tip[0], 0, handCapture.width, p.width, 0); // mirrored
             const hy = p.map(tip[1], 0, handCapture.height, 0, p.height);
-            // Spawn orbs every frame
+            // Spawn 4 orbs per frame for a dense, sensitive trail
             const colors = [
                 [255, 100, 200], [180, 100, 255], [100, 220, 255],
                 [255, 220, 80],  [100, 255, 180], [255, 140, 80]
             ];
-            const c = colors[Math.floor(p.random(colors.length))];
-            fairyParticles.push({
-                x: hx + p.random(-8, 8),
-                y: hy + p.random(-8, 8),
-                vx: p.random(-0.8, 0.8),
-                vy: p.random(-1.5, -0.3),
-                r: c[0], g: c[1], b: c[2],
-                size: p.random(4, 12),
-                life: 1.0
-            });
+            for (let s = 0; s < 4; s++) {
+                const c = colors[Math.floor(p.random(colors.length))];
+                fairyParticles.push({
+                    x: hx + p.random(-10, 10),
+                    y: hy + p.random(-10, 10),
+                    vx: p.random(-1, 1),
+                    vy: p.random(-1.2, -0.2),
+                    r: c[0], g: c[1], b: c[2],
+                    size: p.random(6, 16),
+                    life: 1.0
+                });
+            }
         }
         // Draw & age fairy dust orbs
         for (let i = fairyParticles.length - 1; i >= 0; i--) {
