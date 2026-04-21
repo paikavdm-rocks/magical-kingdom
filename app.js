@@ -16,7 +16,9 @@ import {
     serverTimestamp,
     limit,
     where,
-    getDocs
+    getDocs,
+    doc,
+    setDoc
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 // --- FIREBASE SETUP ---
@@ -73,6 +75,46 @@ let handCapture;
 let fairyDustMode = false;
 let fairyParticles = [];
 let currentHand = null;
+
+const generateId = () => Math.random().toString(36).substr(2, 9);
+let unsubRealm = null;
+let syncingFromServer = false;
+
+window.syncRealmItems = () => {
+    if (!currentUser || syncingFromServer) return;
+    setDoc(doc(db, "realms", currentRealm), { 
+        items: items.map(i => ({ id: i.id, x: i.x, y: i.y, type: i.type, scale: i.scale || 1, dataUrl: i.dataUrl || null, accessory: i.accessory || null })) 
+    });
+};
+
+window.listenToRealm = (realmName) => {
+    if (unsubRealm) unsubRealm();
+    unsubRealm = onSnapshot(doc(db, "realms", realmName), (snapshot) => {
+        if (!snapshot.exists()) {
+            if (currentUser) setDoc(doc(db, "realms", realmName), { items: [] });
+            return;
+        }
+        syncingFromServer = true;
+        const data = snapshot.data();
+        if (data.items) {
+            const remoteIds = data.items.map(r => r.id);
+            items = items.filter(i => remoteIds.includes(i.id) || i === draggingItem || i === chargingItem);
+            
+            data.items.forEach(rmt => {
+                const loc = items.find(i => i.id === rmt.id);
+                if (loc) {
+                    if (loc !== draggingItem) {
+                        loc.x = rmt.x; loc.y = rmt.y; loc.scale = rmt.scale;
+                    }
+                } else {
+                    const newItem = { ...rmt, img: rmt.dataUrl ? myP5.loadImage(rmt.dataUrl, (loaded) => loaded.mask ? null : makeTransparent(loaded)) : null };
+                    items.push(newItem);
+                }
+            });
+        }
+        syncingFromServer = false;
+    });
+};
 
 const sketch = (p) => {
     p.preload = () => {
@@ -192,6 +234,7 @@ const sketch = (p) => {
                 f = true; 
                 if (selectedType === 'eraser') {
                     items.splice(i, 1);
+                    if (currentUser) window.syncRealmItems();
                     return; // deleted, do nothing else
                 }
                 draggingItem = items[i]; 
@@ -206,18 +249,32 @@ const sketch = (p) => {
     };
     p.mouseDragged = () => { if (draggingItem) { draggingItem.x = p.mouseX; draggingItem.y = p.mouseY; } };
     p.mouseReleased = () => { 
+        let changed = false;
         if (chargingItem && !draggingItem) {
             const holdTime = p.millis() - chargeStartTime;
             const finalScale = p.constrain(p.map(holdTime, 0, 2000, 0.5, 4), 0.5, 4);
-            items.push({ x: chargingItem.x, y: chargingItem.y, type: chargingItem.type, scale: finalScale });
+            items.push({ id: generateId(), x: chargingItem.x, y: chargingItem.y, type: chargingItem.type, scale: finalScale });
+            changed = true;
+        } else if (draggingItem) {
+            changed = true;
         }
         chargingItem = null;
         draggingItem = null; 
+        if (changed && currentUser) window.syncRealmItems();
     };
-    p.keyPressed = () => { if (p.keyCode === p.DELETE || p.keyCode === p.BACKSPACE) items = items.filter(i => p.dist(p.mouseX, p.mouseY, i.x, i.y) > 50); };
+    p.keyPressed = () => { 
+        if (p.keyCode === p.DELETE || p.keyCode === p.BACKSPACE) {
+            items = items.filter(i => p.dist(p.mouseX, p.mouseY, i.x, i.y) > 50); 
+            if (currentUser) window.syncRealmItems();
+        }
+    };
 
     window.addSticker = (url, type, acc = null) => {
-        p.loadImage(url, (img) => { makeTransparent(img); items.push({ x: p.width / 2, y: p.height / 2, type: type, img: img, dataUrl: img.canvas?.toDataURL() || url, accessory: acc }); });
+        p.loadImage(url, (img) => { 
+            makeTransparent(img); 
+            items.push({ id: generateId(), x: p.width / 2, y: p.height / 2, type: type, img: img, dataUrl: img.canvas?.toDataURL() || url, accessory: acc, scale: 1 }); 
+            if (currentUser) window.syncRealmItems();
+        });
     };
 
     window.startCamera = () => {
@@ -278,9 +335,10 @@ const sketch = (p) => {
             const randomAcc = accs[Math.floor(Math.random() * accs.length)];
             const d = finalBuff.canvas.toDataURL();
             
-            items.push({ x: p.width / 2, y: p.height / 2, type: 'selfie', img: finalBuff.get(), dataUrl: d, accessory: randomAcc, scale: 1 });
+            items.push({ id: generateId(), x: p.width / 2, y: p.height / 2, type: 'selfie', img: finalBuff.get(), dataUrl: d, accessory: randomAcc, scale: 1 });
             
             if (currentUser) {
+                window.syncRealmItems();
                 addDoc(collection(db, "spirit_stickers"), { 
                     creator: currentUser.email.split('@')[0], 
                     dataUrl: d, 
@@ -406,18 +464,15 @@ function initUIListeners() {
 
 onAuthStateChanged(auth, async (user) => {
     if (user) {
-        currentUser = user; getEl('auth-overlay').classList.add('hidden'); getEl('user-info').classList.remove('hidden');
+        currentUser = user; 
+        getEl('auth-overlay').classList.add('hidden'); 
+        getEl('user-info').classList.remove('hidden');
         getEl('user-display').innerText = `Elder ${user.email.split('@')[0]}`;
-        loadGallery(); listenToSharedStickers();
         
-        // Auto-load User's Latest Work
-        const q = query(collection(db, "scenes"), where("uid", "==", user.uid), orderBy("createdAt", "desc"), limit(1));
-        const sn = await getDocs(q);
-        if (!sn.empty) {
-            const d = sn.docs[0].data();
-            currentRealm = d.realm || 'emerald'; applyTheme(currentRealm);
-            items = d.arrangement.map(i => ({ ...i, img: i.dataUrl ? myP5.loadImage(i.dataUrl) : null }));
-        }
+        // Start multiplayer realtime sync
+        window.listenToRealm(currentRealm);
+        loadGallery(); 
+        listenToSharedStickers();
     } else {
         currentUser = null; getEl('auth-overlay').classList.remove('hidden'); getEl('user-info').classList.add('hidden');
     }
@@ -448,8 +503,10 @@ function loadGallery() {
                 card.className = 'scene-card'; card.style.borderColor = themes[d.realm || 'emerald'].primary;
                 card.innerHTML = `<h3>${d.creator}'s ${d.realm || 'emerald'} Realm</h3>`;
                 card.onclick = () => {
-                    currentRealm = d.realm || 'emerald'; applyTheme(currentRealm);
-                    items = d.arrangement.map(i => ({ ...i, img: i.dataUrl ? myP5.loadImage(i.dataUrl) : null }));
+                    currentRealm = d.realm || 'emerald'; 
+                    applyTheme(currentRealm);
+                    window.listenToRealm(currentRealm);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
                 };
                 gal.appendChild(card);
             });
