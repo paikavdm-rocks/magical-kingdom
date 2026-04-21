@@ -245,11 +245,15 @@ const sketch = (p) => {
     };
 
     window.takeSelfie = () => {
-        if (!cameraReady || !bodypix || !capture) { window.startCamera(); return; }
+        if (!cameraReady || !bodypix || !capture) { 
+            console.log("Still warming up..."); 
+            return; // Don't infinite loop with startCamera!
+        }
         const btn = getEl('selfie-btn');
         if (btn) { btn.innerText = "CAPTURING..."; btn.style.opacity = "0.5"; }
-        bodypix.segment(capture, (error, result) => {
-            if (btn) { btn.innerText = "📸 CAPTURE FACE STICKER"; btn.style.opacity = "1"; }
+        // Pass capture.elt to segment just in case reparenting the DOM node messed with ml5 reading the video
+        bodypix.segment(capture.elt || capture, (error, result) => {
+            if (btn) { btn.innerText = "📸 SNAP FACE STICKER!"; btn.style.opacity = "1"; }
             if (error) { console.error(error); return; }
             let buff = p.createGraphics(320, 240); buff.image(capture, 0, 0); buff.loadPixels();
             for (let i = 0; i < buff.pixels.length; i += 4) { if (result.mask.data[i/4] === 0) buff.pixels[i+3] = 0; }
