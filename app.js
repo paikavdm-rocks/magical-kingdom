@@ -240,6 +240,8 @@ function initUIListeners() {
             btn.style.borderColor = 'white';
             currentRealm = btn.dataset.realm;
             applyTheme(currentRealm);
+            // Picking a realm now automatically joins the kingdom
+            if (getEl('auth-overlay')) getEl('auth-overlay').classList.add('hidden');
         };
     });
 
@@ -266,11 +268,6 @@ function initUIListeners() {
             }); alert("Recorded!");
         } catch (e) { alert(e.message); }
         saveBtn.innerText = "RECORD SCENE";
-    };
-
-    const guestBtn = getEl('enter-guest-btn');
-    if (guestBtn) guestBtn.onclick = () => {
-        getEl('auth-overlay').classList.add('hidden');
     };
 }
 window.logout = () => signOut(auth).then(() => location.reload());
