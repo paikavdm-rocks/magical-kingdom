@@ -240,79 +240,56 @@ const sketch = (p) => {
                 capture.hide();
             }
 
-            if (btn) btn.innerText = "LOADING MAGIC...";
-            bodypix = ml5.bodyPix(capture, { multiplier: 0.75, outputStride: 16, segmentationThreshold: 0.5 }, () => {
-                console.log('BodyPix ready');
-                cameraReady = true;
-                // Don't auto-take selfie! Tell user to click again to snap it.
-                if (btn) { btn.innerText = "📸 SNAP FACE STICKER!"; btn.style.opacity = "1"; }
-            });
+            cameraReady = true;
+            if (btn) { btn.innerText = "📸 SNAP FACE STICKER!"; btn.style.opacity = "1"; }
         });
     };
 
     window.takeSelfie = () => {
-        if (!cameraReady || !bodypix || !capture) { 
+        if (!cameraReady || !capture) { 
             console.log("Still warming up..."); 
             return; 
         }
-        const btn = getEl('selfie-btn');
-        if (btn) { btn.innerText = "CAPTURING..."; btn.style.opacity = "0.5"; }
         
         try {
-            // Passing NO element to segment() tells ML5 to just use the video stream it was initialized with!
-            // This prevents it from trying to parse the capture object and crashing.
-            bodypix.segment((error, result) => {
-                if (btn) { btn.innerText = "📸 SNAP FACE STICKER!"; btn.style.opacity = "1"; }
-                
-                if (error) { 
-                    alert("ML5 AI Error: " + error); 
-                    return; 
-                }
-                
-                try {
-                    let maskData = result.raw?.data || result.mask?.data || result.segmentation?.data || result.data;
-                    
-                    if (!maskData) {
-                        alert("Error: ML5 did not return expected segmentation mask.");
-                        console.log("Result object:", result);
-                        return;
-                    }
-
-                    let buff = p.createGraphics(320, 240); 
-                    buff.image(capture, 0, 0, 320, 240); 
-                    buff.loadPixels();
-                    
-                    for (let i = 0; i < buff.pixels.length; i += 4) { 
-                        if (maskData[i/4] === 0) buff.pixels[i+3] = 0; 
-                    }
-                    buff.updatePixels();
-                    
-                    let finalBuff = p.createGraphics(200, 200); 
-                    finalBuff.translate(200, 0); 
-                    finalBuff.scale(-1, 1); 
-                    finalBuff.image(buff, -60, 0, 320, 240);
-                    
-                    const accs = ['wings', 'crown', 'ears', 'necklace', null]; 
-                    const randomAcc = accs[Math.floor(Math.random() * accs.length)];
-                    const d = finalBuff.canvas.toDataURL();
-                    
-                    items.push({ x: p.width / 2, y: p.height / 2, type: 'selfie', img: finalBuff.get(), dataUrl: d, accessory: randomAcc, scale: 1 });
-                    
-                    if (currentUser) {
-                        addDoc(collection(db, "spirit_stickers"), { 
-                            creator: currentUser.email.split('@')[0], 
-                            dataUrl: d, 
-                            createdAt: serverTimestamp(), 
-                            accessory: randomAcc 
-                        }).catch(e => console.warn("Sticker save:", e));
-                    }
-                } catch(e) {
-                    alert("Processing Error: " + e.message);
-                    console.error(e);
-                }
-            });
+            // Buffer the raw webcam frame
+            let buff = p.createGraphics(320, 240); 
+            buff.image(capture, 0, 0, 320, 240);
+            
+            // Extract a 200x200 square from the center of the 320x240 video
+            let img = buff.get(60, 20, 200, 200); 
+            
+            // Create a perfect circle mask
+            let msk = p.createGraphics(200, 200);
+            msk.fill(255);
+            msk.noStroke();
+            msk.circle(100, 100, 180);
+            
+            img.mask(msk.get()); // Apply circle crop so it's a floating bubble!
+            
+            // Draw onto final transparent background, and mirror it horizontally
+            let finalBuff = p.createGraphics(200, 200); 
+            finalBuff.translate(200, 0); 
+            finalBuff.scale(-1, 1); 
+            finalBuff.imageMode(p.CENTER);
+            finalBuff.image(img, 100, 100);
+            
+            const accs = ['wings', 'crown', 'ears', 'necklace', null]; 
+            const randomAcc = accs[Math.floor(Math.random() * accs.length)];
+            const d = finalBuff.canvas.toDataURL();
+            
+            items.push({ x: p.width / 2, y: p.height / 2, type: 'selfie', img: finalBuff.get(), dataUrl: d, accessory: randomAcc, scale: 1 });
+            
+            if (currentUser) {
+                addDoc(collection(db, "spirit_stickers"), { 
+                    creator: currentUser.email.split('@')[0], 
+                    dataUrl: d, 
+                    createdAt: serverTimestamp(), 
+                    accessory: randomAcc 
+                }).catch(e => console.warn("Sticker save:", e));
+            }
         } catch (e) {
-            alert("Segment Trigger Error: " + e.message);
+            alert("Camera Capture Error: " + e.message);
             console.error(e);
         }
     };
