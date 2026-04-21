@@ -103,27 +103,42 @@ const sketch = (p) => {
         // Fairy dust particles
         if (fairyDustMode && currentHand) {
             const kps = currentHand.landmarks;
-            // Landmark 8 = index fingertip
-            const tip = kps[8];
-            // HandPose coords are relative to the handCapture video size; map to canvas
-            const hx = p.map(tip[0], 0, handCapture.width, p.width, 0); // mirror
+            const tip = kps[8]; // index fingertip
+            const hx = p.map(tip[0], 0, handCapture.width, p.width, 0); // mirrored
             const hy = p.map(tip[1], 0, handCapture.height, 0, p.height);
-            // Spawn sparkles
-            const sparks = ['✨','⭐','💫','🌟','❄️'];
-            if (p.frameCount % 3 === 0) {
-                fairyParticles.push({ x: hx, y: hy, life: 1.0, size: p.random(20, 50), spark: sparks[Math.floor(p.random(sparks.length))] });
-            }
+            // Spawn orbs every frame
+            const colors = [
+                [255, 100, 200], [180, 100, 255], [100, 220, 255],
+                [255, 220, 80],  [100, 255, 180], [255, 140, 80]
+            ];
+            const c = colors[Math.floor(p.random(colors.length))];
+            fairyParticles.push({
+                x: hx + p.random(-8, 8),
+                y: hy + p.random(-8, 8),
+                vx: p.random(-0.8, 0.8),
+                vy: p.random(-1.5, -0.3),
+                r: c[0], g: c[1], b: c[2],
+                size: p.random(4, 12),
+                life: 1.0
+            });
         }
-        // Draw & age fairy dust particles
+        // Draw & age fairy dust orbs
         for (let i = fairyParticles.length - 1; i >= 0; i--) {
             const pt = fairyParticles[i];
-            p.push(); p.textAlign(p.CENTER, p.CENTER);
-            p.textSize(pt.size * pt.life);
-            p.drawingContext.globalAlpha = pt.life;
-            p.text(pt.spark, pt.x, pt.y);
-            p.drawingContext.globalAlpha = 1.0;
+            p.push(); p.noStroke();
+            // Outer glow layers
+            for (let layer = 4; layer >= 0; layer--) {
+                const alpha = pt.life * 60 * (1 - layer / 5);
+                const sz = pt.size * (1 + layer * 0.8);
+                p.fill(pt.r, pt.g, pt.b, alpha);
+                p.ellipse(pt.x, pt.y, sz, sz);
+            }
+            // Bright core
+            p.fill(255, 255, 255, pt.life * 200);
+            p.ellipse(pt.x, pt.y, pt.size * 0.4, pt.size * 0.4);
             p.pop();
-            pt.life -= 0.025;
+            pt.x += pt.vx; pt.y += pt.vy;
+            pt.life -= 0.018;
             if (pt.life <= 0) fairyParticles.splice(i, 1);
         }
 
