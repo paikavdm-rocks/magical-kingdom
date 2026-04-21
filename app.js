@@ -235,7 +235,7 @@ const sketch = (p) => {
             }
 
             if (btn) btn.innerText = "LOADING MAGIC...";
-            bodypix = ml5.bodyPix(capture.elt, { multiplier: 0.75, outputStride: 16, segmentationThreshold: 0.5 }, () => {
+            bodypix = ml5.bodyPix(capture, { multiplier: 0.75, outputStride: 16, segmentationThreshold: 0.5 }, () => {
                 console.log('BodyPix ready');
                 cameraReady = true;
                 // Don't auto-take selfie! Tell user to click again to snap it.
@@ -253,8 +253,9 @@ const sketch = (p) => {
         if (btn) { btn.innerText = "CAPTURING..."; btn.style.opacity = "0.5"; }
         
         try {
-            // Use raw HTML video element (.elt) instead of p5 object wrapper so ml5 doesn't crash looking for p5 hooks
-            bodypix.segment(capture.elt, (error, result) => {
+            // Passing NO element to segment() tells ML5 to just use the video stream it was initialized with!
+            // This prevents it from trying to parse the capture object and crashing.
+            bodypix.segment((error, result) => {
                 if (btn) { btn.innerText = "📸 SNAP FACE STICKER!"; btn.style.opacity = "1"; }
                 
                 if (error) { 
