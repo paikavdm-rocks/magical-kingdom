@@ -267,13 +267,17 @@
 
     <main id="app-container">
         <div id="game-area">
-            <div id="canvas-container" style="border: 4px solid var(--primary); box-shadow: 0 0 40px rgba(80,250,123,0.2);">
+            <div id="canvas-container" style="position: relative; border: 4px solid var(--primary); box-shadow: 0 0 40px rgba(80,250,123,0.2); border-radius: 20px;">
+                <!-- Physical Take Selfie Button on top of canvas -->
+                <button id="selfie-btn" style="position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 100; padding: 15px 30px; border-radius: 50px; background: var(--primary); color: #000; font-weight: bold; border: none; cursor: pointer; box-shadow: 0 0 20px var(--primary);">
+                    📸 TAKE SPIRIT SELFIE
+                </button>
                 <!-- p5 canvas will go here -->
             </div>
 
             <div class="sidebar">
-                <div class="panel" style="background: rgba(0,0,0,0.4); border-color: var(--primary);">
-                    <h3 style="font-family: 'Playfair Display'; color: var(--secondary);">Magic Elements</h3>
+                <div class="panel" style="background: rgba(0,0,0,0.4); border: 2px solid var(--primary); border-radius: 20px;">
+                    <h3 style="font-family: 'Playfair Display'; color: var(--secondary); margin-top: 0;">Magic Elements</h3>
                     <div class="item-picker" id="item-picker">
                         <button class="item-btn" data-type="fairy">🧚</button>
                         <button class="item-btn" data-type="mushroom">🍄</button>
@@ -284,33 +288,25 @@
                     </div>
 
                     <!-- Shared Sticker Bank -->
-                    <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--border);">
-                        <p style="font-size: 0.8rem; margin-bottom: 5px; color: var(--secondary);">Shared Spirit Stickers:</p>
-                        <div id="shared-stickers" style="display: flex; flex-wrap: wrap; gap: 5px; height: 60px; overflow-y: auto; background: rgba(0,0,0,0.2); padding: 5px; border-radius: 10px;">
-                            <span style="font-size: 0.7rem; opacity: 0.5;">Collecting spirits...</span>
+                    <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--border);">
+                        <p style="font-size: 0.8rem; margin-bottom: 10px; color: var(--secondary); font-weight: bold;">Shared Spirit Stickers:</p>
+                        <div id="shared-stickers" style="display: flex; flex-wrap: wrap; gap: 8px; max-height: 120px; overflow-y: auto; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 15px;">
+                            <!-- Dynamically loaded stickers -->
                         </div>
                     </div>
-                    
-                    <div style="margin-top: 20px; border-top: 1px solid var(--border); padding-top: 20px;">
-                        <button id="selfie-btn" class="btn-primary" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 1rem; background: var(--accent); color: #000;">
-                            📸 Capture Spirit Selfie
-                        </button>
-                    </div>
                 </div>
 
-                <!-- NEW: AI CONJURING PANEL -->
-                <div class="panel" style="background: rgba(0,0,0,0.4); border-color: var(--accent);">
-                    <h3 style="font-family: 'Playfair Display'; color: var(--accent);">AI Conjuring</h3>
-                    <input type="text" id="ai-prompt" placeholder="A golden rabbit..." style="font-size: 0.8rem; background: rgba(0,0,0,0.3); border: 1px solid var(--accent);">
-                    <button id="ai-btn" class="btn-primary" style="width: 100%; font-size: 0.9rem; background: var(--accent); color: #000;">✨ CONJURE ITEM</button>
-                    <p style="font-size: 0.7rem; opacity: 0.6; margin-top: 5px;">Uses magic to create new objects.</p>
+                <div class="panel" style="background: rgba(0,0,0,0.4); border: 2px solid var(--accent); border-radius: 20px;">
+                    <h3 style="font-family: 'Playfair Display'; color: var(--accent); margin-top: 0;">AI Conjuring</h3>
+                    <input type="text" id="ai-prompt" placeholder="A golden rabbit..." style="width: 100%; box-sizing: border-box; padding: 10px; margin-bottom: 10px; background: rgba(255,255,255,0.1); border: 1px solid var(--accent); color: white; border-radius: 10px;">
+                    <button id="ai-btn" class="btn-primary" style="width: 100%; padding: 12px; background: var(--accent); color: #000; font-weight: bold; border-radius: 10px; border: none; cursor: pointer;">✨ CONJURE ITEM</button>
                 </div>
 
-                <div class="panel" style="background: rgba(0,0,0,0.4); border-color: var(--primary);">
-                    <h3 style="font-family: 'Playfair Display'; color: var(--secondary);">Lore & Mood</h3>
-                    <textarea id="scene-description" style="width:100%; height:80px; background:rgba(0,0,0,0.3); color:white; border-radius:10px; border:1px solid var(--border); padding:10px; font-family:inherit;" placeholder="Describe the ancient magic here..."></textarea>
-                    <button class="btn-primary" id="save-btn" style="width:100%; margin-top: 1rem; letter-spacing: 1px;">COMMIT TO ETERNITY</button>
-                    <button id="clear-btn" style="width:100%; background:transparent; border: 1px solid rgba(255,0,0,0.3); color:#ff5555; margin-top:0.5rem; font-size: 0.8rem;">Vanish All Magic</button>
+                <div class="panel" style="background: rgba(0,0,0,0.4); border: 2px solid var(--primary); border-radius: 20px;">
+                    <h3 style="font-family: 'Playfair Display'; color: var(--secondary); margin-top: 0;">Lore</h3>
+                    <textarea id="scene-description" style="width:100%; box-sizing: border-box; height:60px; background:rgba(0,0,0,0.3); color:white; border-radius:10px; border:1px solid var(--border); padding:10px; font-family:inherit;" placeholder="Describe the ancient magic..."></textarea>
+                    <button class="btn-primary" id="save-btn" style="width:100%; margin-top: 10px; padding: 15px; background: var(--primary); color: #000; font-weight: bold; border-radius: 10px; border: none; cursor: pointer;">COMMIT TO ETERNITY</button>
+                    <button id="clear-btn" style="width: 100%; background: none; border: none; color: #ff5555; font-size: 0.7rem; margin-top: 5px; cursor: pointer;">[ VANISH ALL MAGIC ]</button>
                 </div>
             </div>
         </div>
