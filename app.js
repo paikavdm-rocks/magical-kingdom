@@ -61,6 +61,13 @@ function applyTheme(realm) {
 }
 
 // --- P5.JS & ML5 ENGINE ---
+
+window.makeTransparent = function(img) {
+    img.loadPixels();
+    for (let i = 0; i < img.pixels.length; i += 4) { if (img.pixels[i] > 240 && img.pixels[i+1] > 240 && img.pixels[i+2] > 240) img.pixels[i+3] = 0; }
+    img.updatePixels();
+};
+
 let items = [];
 let draggingItem = null;
 let chargingItem = null;
@@ -114,7 +121,7 @@ window.listenToRealm = (realmName) => {
                         loc.x = rmt.x; loc.y = rmt.y; loc.scale = rmt.scale;
                     }
                 } else {
-                    const newItem = { ...rmt, img: rmt.dataUrl ? myP5.loadImage(rmt.dataUrl, (loaded) => loaded.mask ? null : makeTransparent(loaded)) : null };
+                    const newItem = { ...rmt, img: rmt.dataUrl ? myP5.loadImage(rmt.dataUrl, (loaded) => loaded.mask ? null : window.makeTransparent(loaded)) : null };
                     items.push(newItem);
                 }
             });
@@ -207,7 +214,7 @@ const sketch = (p) => {
                         if (item.accessory === 'ears') { p.textSize(0.4 * s); p.text('✨', -0.45 * s, -0.3 * s); p.text('✨', 0.45 * s, -0.3 * s); }
                         p.pop();
                     } else p.image(item.img, 0, 0, s, s);
-                } else if (item.dataUrl) item.img = p.loadImage(item.dataUrl, (loaded) => makeTransparent(loaded));
+                } else if (item.dataUrl) item.img = p.loadImage(item.dataUrl, (loaded) => window.makeTransparent(loaded));
             } else {
                 p.textAlign(p.CENTER, p.CENTER); p.textSize(50 * (item.scale || 1));
                 p.text(getEmoji(item.type), 0, 0);
@@ -278,7 +285,7 @@ const sketch = (p) => {
 
     window.addSticker = (url, type, acc = null) => {
         p.loadImage(url, (img) => { 
-            makeTransparent(img); 
+            window.makeTransparent(img); 
             items.push({ id: generateId(), x: p.width / 2, y: p.height / 2, type: type, img: img, dataUrl: img.canvas?.toDataURL() || url, accessory: acc, scale: 1 }); 
             if (currentUser) window.syncRealmItems();
         });
@@ -359,11 +366,7 @@ const sketch = (p) => {
         }
     };
 
-    function makeTransparent(img) {
-        img.loadPixels();
-        for (let i = 0; i < img.pixels.length; i += 4) { if (img.pixels[i] > 240 && img.pixels[i+1] > 240 && img.pixels[i+2] > 240) img.pixels[i+3] = 0; }
-        img.updatePixels();
-    }
+
     p.windowResized = () => { const container = getEl('canvas-container'); if (container && container.offsetWidth > 0) p.resizeCanvas(container.offsetWidth, 550); };
 
     window.toggleFairyDust = () => {
