@@ -225,20 +225,33 @@
 
     <div id="auth-overlay">
         <div class="auth-box">
-            <h2 id="auth-title">The Gemstone Realms</h2>
-            <p>Select your allegiance and enter your credentials.</p>
+            <h2 id="auth-title">Choose Your Astral Realm</h2>
+            <p>Select your allegiance and prove your magic.</p>
             
-            <div id="realm-selector" style="display: flex; justify-content: center; gap: 10px; margin-bottom: 20px;">
-                <button class="realm-btn active" data-realm="emerald" style="background:#50fa7b; width:40px; height:40px; border-radius:50%; border:2px solid white; cursor:pointer;" title="The Whispering Grove"></button>
-                <button class="realm-btn" data-realm="ruby" style="background:#ff5555; width:40px; height:40px; border-radius:50%; border:2px solid transparent; cursor:pointer;" title="The Crimson Spire"></button>
-                <button class="realm-btn" data-realm="jade" style="background:#8be9fd; width:40px; height:40px; border-radius:50%; border:2px solid transparent; cursor:pointer;" title="The Frostfire Lagoon"></button>
-                <button class="realm-btn" data-realm="amethyst" style="background:#bd93f9; width:40px; height:40px; border-radius:50%; border:2px solid transparent; cursor:pointer;" title="The Astral Void"></button>
+            <div id="realm-selector" style="display: flex; justify-content: center; gap: 15px; margin-bottom: 25px; flex-wrap: wrap;">
+                <div style="text-align: center;">
+                    <button class="realm-btn active" data-realm="emerald" style="background:#50fa7b; width:45px; height:45px; border-radius:50%; border:2px solid white; cursor:pointer;" title="The Whispering Grove"></button>
+                    <div style="font-size: 0.6rem; color: #50fa7b; margin-top: 5px;">GROVE</div>
+                </div>
+                <div style="text-align: center;">
+                    <button class="realm-btn" data-realm="ruby" style="background:#ff5555; width:45px; height:45px; border-radius:50%; border:2px solid transparent; cursor:pointer;" title="The Crimson Spire"></button>
+                    <div style="font-size: 0.6rem; color: #ff5555; margin-top: 5px;">SPIRE</div>
+                </div>
+                <div style="text-align: center;">
+                    <button class="realm-btn" data-realm="jade" style="background:#8be9fd; width:45px; height:45px; border-radius:50%; border:2px solid transparent; cursor:pointer;" title="The Frostfire Lagoon"></button>
+                    <div style="font-size: 0.6rem; color: #8be9fd; margin-top: 5px;">LAGOON</div>
+                </div>
+                <div style="text-align: center;">
+                    <button class="realm-btn" data-realm="amethyst" style="background:#bd93f9; width:45px; height:45px; border-radius:50%; border:2px solid transparent; cursor:pointer;" title="The Astral Void"></button>
+                    <div style="font-size: 0.6rem; color: #bd93f9; margin-top: 5px;">VOID</div>
+                </div>
             </div>
 
             <input type="email" id="email" placeholder="Magical Email">
             <input type="password" id="password" placeholder="Secret Password">
-            <div style="margin-top: 1rem;">
-                <button class="btn-primary" id="login-btn">ENTER REALM</button>
+            <div style="margin-top: 1rem; display: flex; gap: 10px;">
+                <button class="btn-primary" id="login-btn" style="flex: 1;">LOGIN</button>
+                <button class="btn-primary" id="signup-btn" style="flex: 1; background: transparent; border: 1px solid var(--primary); color: var(--primary);">SIGN UP</button>
             </div>
         </div>
     </div>

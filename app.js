@@ -46,6 +46,7 @@ const themes = {
 const authOverlay = document.getElementById('auth-overlay');
 const realmBtns = document.querySelectorAll('.realm-btn');
 const loginBtn = document.getElementById('login-btn');
+const signupBtn = document.getElementById('signup-btn');
 const emailInput = document.getElementById('email');
 const passwordInput = document.getElementById('password');
 const userInfo = document.getElementById('user-info');
@@ -82,33 +83,48 @@ function applyTheme(realm) {
     document.getElementById('sub-title').innerText = theme.lore;
     document.body.style.background = `radial-gradient(circle at center, ${lighten(theme.bg, 10)} 0%, ${theme.bg} 100%)`;
     
-    // Update p5 background if it exists
     if (window.updateP5Colors) window.updateP5Colors(theme);
 }
 
-// Helpers for color manipulation
 function hexToRgb(hex) {
     const bigint = parseInt(hex.slice(1), 16);
     return `${(bigint >> 16) & 255}, ${(bigint >> 8) & 255}, ${bigint & 255}`;
 }
-function lighten(col, amt) {
-    return col; // Simpler for now
-}
+function lighten(col, amt) { return col; }
 
 // --- AUTH LOGIC ---
 loginBtn.addEventListener('click', async () => {
     const email = emailInput.value;
     const password = passwordInput.value;
-    if (!email || !password) return alert("Identify yourself!");
+    if (!email || !password) return alert("Magical credentials required!");
 
     try {
         await signInWithEmailAndPassword(auth, email, password);
     } catch (error) {
-        if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
-            try {
-                await createUserWithEmailAndPassword(auth, email, password);
-            } catch (err) { alert(err.message); }
-        } else { alert(error.message); }
+        if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+            alert("Wrong Magic Words! Please try again.");
+        } else if (error.code === 'auth/user-not-found') {
+            alert("No fairy found with this email. Click 'SIGN UP' to create your account!");
+        } else {
+            alert(error.message);
+        }
+    }
+});
+
+signupBtn.addEventListener('click', async () => {
+    const email = emailInput.value;
+    const password = passwordInput.value;
+    if (!email || !password) return alert("Credentials required for sign up!");
+
+    try {
+        await createUserWithEmailAndPassword(auth, email, password);
+        alert("Account created successfully! Welcome to the realm.");
+    } catch (error) {
+        if (error.code === 'auth/email-already-in-use') {
+            alert("This email is already in use! Please use LOGIN instead.");
+        } else {
+            alert(error.message);
+        }
     }
 });
 
@@ -150,17 +166,11 @@ const sketch = (p) => {
         window.updateP5Colors = (theme) => {
             bgPrimary = p.color(theme.primary);
             bgSecondary = p.color(theme.secondary);
-            // Re-generate forest
             forestBg = [];
             for(let i=0; i<30; i++) {
                 let c = p.color(theme.primary);
                 c.setAlpha(p.random(50, 150));
-                forestBg.push({
-                    x: p.random(p.width),
-                    y: p.random(p.height),
-                    size: p.random(20, 100),
-                    color: c
-                });
+                forestBg.push({ x: p.random(p.width), y: p.random(p.height), size: p.random(20, 100), color: c });
             }
         };
         applyTheme(currentRealm);
@@ -168,38 +178,29 @@ const sketch = (p) => {
 
     p.draw = () => {
         p.background(themes[currentRealm].bg);
-        
         p.noStroke();
         forestBg.forEach(leaf => {
             p.fill(leaf.color);
             p.ellipse(leaf.x, leaf.y + p.sin(p.frameCount * 0.01 + leaf.x) * 10, leaf.size, leaf.size * 1.5);
         });
-
         for(let i=0; i<15; i++) {
             let x = p.noise(i, p.frameCount * 0.005) * p.width;
             let y = p.noise(i + 10, p.frameCount * 0.005) * p.height;
             p.fill(bgSecondary || 255, p.noise(i, p.frameCount * 0.02) * 255);
             p.ellipse(x, y, 4, 4);
         }
-
         items.forEach(item => {
             p.push();
             p.translate(item.x, item.y);
-            let hovered = p.dist(p.mouseX, p.mouseY, item.x, item.y) < 40;
-            if (hovered) p.scale(1.15 + p.sin(p.frameCount * 0.1) * 0.05);
-
+            if (p.dist(p.mouseX, p.mouseY, item.x, item.y) < 40) p.scale(1.15);
             if (item.type === 'selfie' || item.type === 'ai') {
                 p.push();
                 p.drawingContext.shadowBlur = 15;
                 p.drawingContext.shadowColor = themes[currentRealm].primary;
                 p.fill(bgPrimary);
                 p.ellipse(0, 0, 85, 85);
-                if (item.img) {
-                    p.imageMode(p.CENTER);
-                    p.image(item.img, 0, 0, 80, 80);
-                } else if (item.dataUrl) {
-                    item.img = p.loadImage(item.dataUrl);
-                }
+                if (item.img) p.image(item.img, -40, -40, 80, 80);
+                else if (item.dataUrl) item.img = p.loadImage(item.dataUrl);
                 p.pop();
             } else {
                 p.textAlign(p.CENTER, p.CENTER);
@@ -211,162 +212,79 @@ const sketch = (p) => {
     };
 
     p.mousePressed = () => {
-        let found = false;
+        let f = false;
         for (let i = items.length - 1; i >= 0; i--) {
-            if (p.dist(p.mouseX, p.mouseY, items[i].x, items[i].y) < 40) {
-                draggingItem = items[i];
-                found = true;
-                break;
-            }
+            if (p.dist(p.mouseX, p.mouseY, items[i].x, items[i].y) < 40) { draggingItem = items[i]; f = true; break; }
         }
-
-        if (!found && p.mouseX > 0 && p.mouseX < p.width && p.mouseY > 0 && p.mouseY < p.height) {
+        if (!f && p.mouseX > 0 && p.mouseX < p.width && p.mouseY > 0 && p.mouseY < p.height) {
             items.push({ x: p.mouseX, y: p.mouseY, type: selectedType });
         }
     };
-
-    p.mouseDragged = () => {
-        if (draggingItem) {
-            draggingItem.x = p.mouseX;
-            draggingItem.y = p.mouseY;
-        }
-    };
-
+    p.mouseDragged = () => { if (draggingItem) { draggingItem.x = p.mouseX; draggingItem.y = p.mouseY; } };
     p.mouseReleased = () => { draggingItem = null; };
-
-    p.keyPressed = () => {
-        if (p.keyCode === p.DELETE || p.keyCode === p.BACKSPACE) {
-            items = items.filter(item => p.dist(p.mouseX, p.mouseY, item.x, item.y) > 40);
-        }
-    };
-
-    window.addSticker = (dataUrl, type = 'selfie') => {
-        let img = p.loadImage(dataUrl);
-        items.push({ x: p.width / 2, y: p.height / 2, type: type, img: img, dataUrl: dataUrl });
-    };
-
+    p.keyPressed = () => { if (p.keyCode === p.DELETE || p.keyCode === p.BACKSPACE) items = items.filter(i => p.dist(p.mouseX, p.mouseY, i.x, i.y) > 40); };
+    window.addSticker = (d, t = 'selfie') => items.push({ x: p.width / 2, y: p.height / 2, type: t, img: p.loadImage(d), dataUrl: d });
     window.takeSelfie = async () => {
-        if (!capture) return;
-        let img = capture.get();
-        img.resize(150, 0);
-        const dataUrl = img.canvas.toDataURL();
-        addSticker(dataUrl, 'selfie');
-        
-        // Share with others
-        if (currentUser) {
-            await addDoc(collection(db, "spirit_stickers"), {
-                creator: currentUser.email.split('@')[0],
-                dataUrl: dataUrl,
-                createdAt: serverTimestamp()
-            });
-        }
+        let img = capture.get(); img.resize(150, 0); const d = img.canvas.toDataURL();
+        addSticker(d, 'selfie');
+        if (currentUser) await addDoc(collection(db, "spirit_stickers"), { creator: currentUser.email.split('@')[0], dataUrl: d, createdAt: serverTimestamp() });
     };
-    
-    p.windowResized = () => {
-        const container = document.getElementById('canvas-container');
-        p.resizeCanvas(container.offsetWidth, 500);
-    };
+    p.windowResized = () => p.resizeCanvas(document.getElementById('canvas-container').offsetWidth, 500);
 };
-
-const myP5 = new p5(sketch);
+new p5(sketch);
 
 // --- UI LISTENERS ---
 selfieBtn.addEventListener('click', () => window.takeSelfie());
-
 aiBtn.addEventListener('click', async () => {
-    const prompt = aiPrompt.value;
-    if (!prompt) return alert("What do you wish to conjure?");
-    
-    aiBtn.disabled = true;
+    const pr = aiPrompt.value; if (!pr) return alert("Prompt needed!");
     aiBtn.innerText = "CONJURING...";
-    
     try {
-        const replicateProxy = "https://itp-ima-replicate-proxy.web.app/api/create_n_get";
-        const response = await fetch(replicateProxy, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                prompt: `sticker of ${prompt}, magical fairy tale style, isolated white background`,
-                model: "stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1d712de74a5ee2486673d4d4d557599c537"
-            })
+        const res = await fetch("https://itp-ima-replicate-proxy.web.app/api/create_n_get", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt: `sticker of ${pr}, magical style, white background`, model: "stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1d712de74a5ee2486673d4d4d557599c537" })
         });
-        const data = await response.json();
-        if (data.output && data.output.length > 0) {
-            window.addSticker(data.output[0], 'ai');
-        }
-    } catch (e) {
-        alert("The void did not answer: " + e.message);
-    } finally {
-        aiBtn.disabled = false;
-        aiBtn.innerText = "✨ CONJURE ITEM";
-    }
+        const d = await res.json();
+        if (d.output) window.addSticker(d.output[0], 'ai');
+    } catch (e) { alert(e.message); }
+    aiBtn.innerText = "✨ CONJURE ITEM";
 });
 
-// --- GLOBAL STICKERS ---
 function listenToSharedStickers() {
-    const q = query(collection(db, "spirit_stickers"), orderBy("createdAt", "desc"), limit(20));
-    onSnapshot(q, (snapshot) => {
+    onSnapshot(query(collection(db, "spirit_stickers"), orderBy("createdAt", "desc"), limit(20)), (sn) => {
         sharedStickerContainer.innerHTML = "";
-        snapshot.forEach(doc => {
-            const data = doc.data();
-            const img = document.createElement('img');
-            img.src = data.dataUrl;
-            img.style.width = '40px';
-            img.style.height = '40px';
-            img.style.borderRadius = '50%';
-            img.style.cursor = 'pointer';
-            img.style.border = '2px solid var(--primary)';
-            img.title = `Spirit of ${data.creator}`;
+        sn.forEach(doc => {
+            const data = doc.data(); const img = document.createElement('img');
+            img.src = data.dataUrl; img.className = 'shared-thumb';
+            img.style = "width:40px; height:40px; border-radius:50%; cursor:pointer; border:2px solid var(--primary); margin:2px;";
             img.onclick = () => window.addSticker(data.dataUrl, 'selfie');
             sharedStickerContainer.appendChild(img);
         });
     });
 }
 
-// --- GALLERY & SAVING ---
 saveBtn.addEventListener('click', async () => {
-    if (!currentUser) return alert("Log in to record your lore!");
+    if (!currentUser) return alert("Login first!");
     saveBtn.innerText = "RECORDING...";
     try {
-        const storageItems = items.map(i => ({ x: i.x, y: i.y, type: i.type, dataUrl: i.dataUrl || null }));
         await addDoc(collection(db, "scenes"), {
-            uid: currentUser.uid,
-            creator: currentUser.email.split('@')[0],
-            realm: currentRealm,
-            description: descriptionInput.value || "A silent realm.",
-            arrangement: storageItems,
+            uid: currentUser.uid, creator: currentUser.email.split('@')[0], realm: currentRealm,
+            description: descriptionInput.value || "", arrangement: items.map(i => ({ x: i.x, y: i.y, type: i.type, dataUrl: i.dataUrl || null })),
             createdAt: serverTimestamp()
-        });
-        alert("Realm recorded!");
+        }); alert("Recorded!");
     } catch (e) { alert(e.message); }
     saveBtn.innerText = "COMMIT TO ETERNITY";
 });
 
 function loadGallery() {
-    const q = query(collection(db, "scenes"), orderBy("createdAt", "desc"));
-    onSnapshot(q, (snapshot) => {
+    onSnapshot(query(collection(db, "scenes"), orderBy("createdAt", "desc")), (sn) => {
         sceneGallery.innerHTML = "";
-        snapshot.forEach(doc => {
-            const data = doc.data();
-            const card = document.createElement('div');
-            card.className = 'scene-card';
-            card.style.borderColor = themes[data.realm || 'emerald'].primary;
-            card.innerHTML = `
-                <h3>${data.creator}'s ${data.realm || 'emerald'}</h3>
-                <p>"${data.description}"</p>
-            `;
-            card.onclick = () => {
-                currentRealm = data.realm || 'emerald';
-                applyTheme(currentRealm);
-                items = data.arrangement.map(i => ({ ...i, img: i.dataUrl ? myP5.loadImage(i.dataUrl) : null }));
-                descriptionInput.value = data.description;
-            };
+        sn.forEach(doc => {
+            const d = doc.data(); const card = document.createElement('div');
+            card.className = 'scene-card'; card.style.borderColor = themes[d.realm || 'emerald'].primary;
+            card.innerHTML = `<h3>${d.creator}'s ${d.realm || 'emerald'}</h3><p>"${d.description}"</p>`;
+            card.onclick = () => { currentRealm = d.realm || 'emerald'; applyTheme(currentRealm); items = d.arrangement.map(i => ({ ...i, img: i.dataUrl ? myP5.loadImage(i.dataUrl) : null })); descriptionInput.value = d.description; };
             sceneGallery.appendChild(card);
         });
     });
 }
-
-function getEmoji(type) {
-    const emojis = { 'fairy': '🧚', 'mushroom': '🍄', 'crystal': '💎', 'flower': '🌸', 'star': '⭐', 'wand': '🪄' };
-    return emojis[type] || '✨';
-}
+function getEmoji(t) { const e = { 'fairy': '🧚', 'mushroom': '🍄', 'crystal': '💎', 'flower': '🌸', 'star': '⭐', 'wand': '🪄' }; return e[t] || '✨'; }
