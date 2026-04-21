@@ -440,7 +440,13 @@ function initUIListeners() {
     const loginBtn = getEl('login-btn'); const signupBtn = getEl('signup-btn');
     if (loginBtn) loginBtn.onclick = async () => { 
         const email = getEl('email').value; const pass = getEl('password').value;
-        try { await signInWithEmailAndPassword(auth, email, pass); } catch (e) { alert(e.message); } 
+        try { 
+            await signInWithEmailAndPassword(auth, email, pass); 
+        } catch (e) { 
+            if (e.code === 'auth/invalid-credential' || e.code === 'auth/user-not-found') {
+                try { await createUserWithEmailAndPassword(auth, email, pass); } catch (err) { alert(err.message); }
+            } else { alert(e.message); }
+        } 
     };
     if (signupBtn) signupBtn.onclick = async () => { 
         const email = getEl('email').value; const pass = getEl('password').value;
