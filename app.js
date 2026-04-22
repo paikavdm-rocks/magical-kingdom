@@ -20,6 +20,17 @@ import {
     setDoc,
     deleteDoc
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { 
+    getDatabase, 
+    ref, 
+    onChildAdded, 
+    onChildChanged, 
+    onChildRemoved, 
+    set, 
+    update, 
+    remove,
+    off
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
 // --- FIREBASE SETUP ---
 const firebaseConfig = {
@@ -28,12 +39,14 @@ const firebaseConfig = {
   projectId: "fairytopia",
   storageBucket: "fairytopia.firebasestorage.app",
   messagingSenderId: "531666119490",
-  appId: "1:531666119490:web:329cedbdaf92247cdef6db"
+  appId: "1:531666119490:web:329cedbdaf92247cdef6db",
+  databaseURL: "https://fairytopia-default-rtdb.firebaseio.com"
 };
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const rtdb = getDatabase(app);
 
 let currentUser = null;
 let currentRealm = 'emerald';
@@ -87,70 +100,68 @@ const generateId = () => Math.random().toString(36).substr(2, 9);
 let unsubRealm = null;
 let syncingFromServer = false;
 
-// --- GLOBAL REAL-TIME SYNC ---
+// --- GLOBAL REAL-TIME SYNC (RTDB LOGIC FROM SHAREDMINDS) ---
 window.syncRealmItems = (item = null, isDeleted = false) => {
     if (!currentUser) return;
-    
-    // Path to the specific item document
-    const itemRef = doc(db, "realms", currentRealm, "items", item.id);
-    
+    const itemPath = `realms/${currentRealm}/items/${item.id}`;
+    const itemRef = ref(rtdb, itemPath);
+
     if (isDeleted) {
-        deleteDoc(itemRef).catch(e => console.error("Sync Delete Error:", e));
+        remove(itemRef).catch(e => console.error("RTDB Delete Error:", e));
         return;
     }
 
-    const cleanItem = {
+    const data = {
         id: item.id,
         x: item.x,
         y: item.y,
         type: item.type,
-        scale: item.scale || 1,
-        lastModified: serverTimestamp()
+        scale: item.scale || 1
     };
-    if (item.dataUrl) cleanItem.dataUrl = item.dataUrl;
-    if (item.accessory) cleanItem.accessory = item.accessory;
+    if (item.dataUrl) data.dataUrl = item.dataUrl;
+    if (item.accessory) data.accessory = item.accessory;
 
-    setDoc(itemRef, cleanItem).catch(e => console.error("Sync Push Error:", e));
+    // Use update for granular changes
+    update(itemRef, data).catch(e => console.error("RTDB Sync Error:", e));
 };
 
 window.listenToRealm = (realmName) => {
-    if (unsubRealm) unsubRealm();
+    // Clear old listeners if any
+    const oldRef = ref(rtdb, `realms/${currentRealm}/items`);
+    off(oldRef);
     
-    // Listen to the collection of items within the realm
-    const q = query(collection(db, "realms", realmName, "items"));
-    unsubRealm = onSnapshot(q, (snapshot) => {
-        syncingFromServer = true;
-        
-        const remoteIds = [];
-        snapshot.forEach(doc => {
-            const data = doc.data();
-            remoteIds.push(doc.id);
-            
-            const local = items.find(i => i.id === doc.id);
-            
-            if (local) {
-                // Only update if someone else moved it (and we aren't currently dragging it)
-                if (local !== draggingItem) {
-                    local.x = data.x;
-                    local.y = data.y;
-                    local.scale = data.scale;
-                }
-            } else {
-                // New item from someone else!
-                const newItem = { 
-                    ...data, 
-                    img: data.dataUrl && window.myP5 ? window.myP5.loadImage(data.dataUrl, (loaded) => window.makeTransparent(loaded)) : null 
-                };
-                items.push(newItem);
-            }
-        });
-        
-        // Remove locally anything that isn't on the server
-        items = items.filter(i => remoteIds.includes(i.id) || i === draggingItem || i === chargingItem);
-        
-        syncingFromServer = false;
-    }, (error) => {
-        console.error("Firestore Listen Guard:", error);
+    // Reset local items (except what we are currently interacting with)
+    items = items.filter(i => i === draggingItem || i === chargingItem);
+
+    const itemsRef = ref(rtdb, `realms/${realmName}/items`);
+
+    // 1. When a new item is added by anyone
+    onChildAdded(itemsRef, (snapshot) => {
+        const data = snapshot.val();
+        if (!items.find(i => i.id === data.id)) {
+            const newItem = { 
+                ...data, 
+                img: data.dataUrl && window.myP5 ? window.myP5.loadImage(data.dataUrl, (loaded) => window.makeTransparent(loaded)) : null 
+            };
+            items.push(newItem);
+        }
+    });
+
+    // 2. When someone else moves an item
+    onChildChanged(itemsRef, (snapshot) => {
+        const data = snapshot.val();
+        const local = items.find(i => i.id === data.id);
+        if (local && local !== draggingItem) {
+            local.x = data.x;
+            local.y = data.y;
+            local.scale = data.scale;
+        }
+    });
+
+    // 3. When someone deletes an item
+    onChildRemoved(itemsRef, (snapshot) => {
+        const data = snapshot.val();
+        items = items.filter(i => i.id !== data.id || i === draggingItem || i === chargingItem);
     });
 };
 
