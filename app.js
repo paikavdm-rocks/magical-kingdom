@@ -531,7 +531,7 @@ function initUIListeners() {
     const saveBtn = getEl('save-btn');
     if (saveBtn) saveBtn.onclick = async () => {
         if (!currentUser) return alert("You must be logged in to commit lore!");
-        saveBtn.innerText = "RECORDING...";
+        saveBtn.innerText = "POSTING...";
         try {
             // Save to Public RTDB Exhibition for SharedMinds style visibility
             const galleryRef = ref(rtdb, 'public_exhibition');
@@ -544,7 +544,7 @@ function initUIListeners() {
                 createdAt: serverTimestamp() // Note: RTDB serverTimestamp is slightly different but often handled by client SDK
             }); alert("Recorded to the Grand Exhibition!");
         } catch (e) { alert(e.message); }
-        saveBtn.innerText = "RECORD SCENE";
+        saveBtn.innerText = "POST TO THE EXHIBITION ✨";
     };
 }
 
