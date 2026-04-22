@@ -300,8 +300,6 @@ const sketch = (p) => {
         if (draggingItem) { 
             draggingItem.x = p.mouseX; 
             draggingItem.y = p.mouseY; 
-            // Optional: Live Dragging Sync (Throttle to save calls)
-            if (p.frameCount % 5 === 0) window.syncRealmItems(draggingItem);
         } 
     };
     p.mouseReleased = () => { 
