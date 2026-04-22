@@ -397,11 +397,8 @@ const sketch = (p) => {
             finalBuff.imageMode(p.CENTER);
             finalBuff.image(img, 100, 100);
             
-            const accs = ['wings', 'crown', 'ears', 'necklace', null]; 
-            const randomAcc = accs[Math.floor(Math.random() * accs.length)];
             const d = finalBuff.canvas.toDataURL();
-            
-            const item = { id: generateId(), x: p.width / 2, y: p.height / 2, type: 'selfie', img: finalBuff.get(), dataUrl: d, accessory: randomAcc, scale: 1 };
+            const item = { id: generateId(), x: p.width / 2, y: p.height / 2, type: 'selfie', img: finalBuff.get(), dataUrl: d, accessory: null, scale: 1 };
             items.push(item);
             
             if (currentUser) {
@@ -411,7 +408,7 @@ const sketch = (p) => {
                 set(bankRef, { 
                     creator: currentUser.email.split('@')[0], 
                     dataUrl: d, 
-                    accessory: randomAcc 
+                    accessory: null 
                 }).catch(e => console.warn("Bank save:", e));
             }
         } catch (e) {
