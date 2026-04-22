@@ -49,7 +49,8 @@ const db = getFirestore(app);
 const rtdb = getDatabase(app);
 
 let currentUser = null;
-let currentRealm = 'emerald';
+let currentRealm = 'initial'; // Default, will be set on login
+let currentTheme = 'emerald'; // The visual style
 let selectedType = 'fairy';
 
 const themes = {
@@ -178,7 +179,7 @@ const sketch = (p) => {
         const w = container ? container.offsetWidth : 800;
         const canvas = p.createCanvas(w > 0 ? w : 800, 550);
         canvas.parent('canvas-container');
-        applyTheme(currentRealm);
+        applyTheme(currentTheme);
         initUIListeners();
     };
 
@@ -489,10 +490,10 @@ function initUIListeners() {
         btn.onclick = () => {
             realmBtns.forEach(b => b.style.border = '1px solid transparent');
             btn.style.border = '3px solid white';
-            currentRealm = btn.dataset.realm;
-            applyTheme(currentRealm);
+            currentTheme = btn.dataset.realm;
+            applyTheme(currentTheme);
             const nameEl = getEl('selected-realm-name');
-            if (nameEl) { nameEl.innerText = realmNames[currentRealm]; nameEl.style.color = themes[currentRealm].primary; }
+            if (nameEl) { nameEl.innerText = realmNames[currentTheme]; nameEl.style.color = themes[currentTheme].primary; }
         };
     });
 
@@ -518,10 +519,12 @@ function initUIListeners() {
         saveBtn.innerText = "RECORDING...";
         try {
             await addDoc(collection(db, "scenes"), {
-                uid: currentUser.uid, creator: currentUser.email.split('@')[0], realm: currentRealm,
-                arrangement: items.map(i => ({ x: i.x, y: i.y, type: i.type, dataUrl: i.dataUrl || null, accessory: i.accessory || null })),
+                uid: currentUser.uid, 
+                creator: currentUser.email.split('@')[0], 
+                realm: currentTheme, // The theme choice
+                arrangement: items.map(i => ({ x: i.x, y: i.y, type: i.type, dataUrl: i.dataUrl || null, accessory: i.accessory || null, scale: i.scale || 1 })),
                 createdAt: serverTimestamp()
-            }); alert("Recorded!");
+            }); alert("Recorded to the Grand Exhibition!");
         } catch (e) { alert(e.message); }
         saveBtn.innerText = "RECORD SCENE";
     };
@@ -534,8 +537,11 @@ onAuthStateChanged(auth, async (user) => {
         getEl('user-info').classList.remove('hidden');
         getEl('user-display').innerText = `Elder ${user.email.split('@')[0]}`;
         
-        // Start multiplayer realtime sync
+        // Start in OWN private realm
+        currentRealm = user.uid;
+        getEl('main-title').innerText = `${user.email.split('@')[0]}'s Kingdom`;
         window.listenToRealm(currentRealm);
+        
         loadGallery(); 
         listenToSharedStickers();
     } else {
@@ -564,12 +570,15 @@ function loadGallery() {
         if (gal) {
             gal.innerHTML = "";
             sn.forEach(doc => {
-                const d = doc.data(); const card = document.createElement('div');
+                const d = doc.data(); 
+                const card = document.createElement('div');
                 card.className = 'scene-card'; card.style.borderColor = themes[d.realm || 'emerald'].primary;
-                card.innerHTML = `<h3>${d.creator}'s ${d.realm || 'emerald'} Realm</h3>`;
+                card.innerHTML = `<h3>${d.creator}'s ${d.realm || 'emerald'} Realm</h3><p style="font-size:0.7rem; opacity:0.6;">Click to enter and edit together!</p>`;
                 card.onclick = () => {
-                    currentRealm = d.realm || 'emerald'; 
-                    applyTheme(currentRealm);
+                    currentRealm = d.uid; // Switch to their LIVE sync ID
+                    currentTheme = d.realm || 'emerald';
+                    if (getEl('main-title')) getEl('main-title').innerText = `${d.creator}'s Kingdom`;
+                    applyTheme(currentTheme);
                     window.listenToRealm(currentRealm);
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                 };
