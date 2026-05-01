@@ -44,6 +44,15 @@ let spiritOrbs = [];
 let fairyMana = 0;
 let spiritHealth = 100;
 let mySpellChoice = 'Fire';
+let selectedSpell = null;
+let spellInventoryDiv;
+let spellStatusText;
+const spellInventory = { Water: 0, Fire: 0, Air: 0 };
+const elementalSpells = {
+  Water: { icon: '💧', color: '#4cc9ff', rgb: [76, 201, 255], beats: 'Fire' },
+  Fire: { icon: '🔥', color: '#ff5a36', rgb: [255, 90, 54], beats: 'Air' },
+  Air: { icon: '🌬️', color: '#d8fbff', rgb: [216, 251, 255], beats: 'Water' }
+};
 let combatButtons = [];
 let isMegaSpell = false;
 let currentKingdom = 'Emerald';
@@ -354,6 +363,23 @@ function setup() {
   feedback.style('margin', '0');
   feedback.parent(controls);
 
+  spellStatusText = createP("Collect Water, Fire, and Air orbs with the top of your index finger.");
+  spellStatusText.style('color', '#d8fbff');
+  spellStatusText.style('font-family', 'Quicksand');
+  spellStatusText.style('font-size', '0.95rem');
+  spellStatusText.style('margin', '0');
+  spellStatusText.style('text-align', 'center');
+  spellStatusText.parent(controls);
+
+  spellInventoryDiv = createDiv();
+  spellInventoryDiv.style('display', 'none');
+  spellInventoryDiv.style('gap', '10px');
+  spellInventoryDiv.style('flex-wrap', 'wrap');
+  spellInventoryDiv.style('justify-content', 'center');
+  spellInventoryDiv.style('max-width', '680px');
+  spellInventoryDiv.parent(controls);
+  renderSpellInventory();
+
   let constraints = { audio: false, video: { facingMode: "user" } };
 
   // Only handpose needed — no body tracking
@@ -467,7 +493,7 @@ function draw() {
 
   pop(); // End flipped view
 
-  // Spirit Orbs during Gathering and Duel (works solo — wand tip collects mana)
+  // Elemental spell orbs during Gathering and Duel.
   if (currentStep >= 3 && currentStep <= 4) {
     handleSpiritOrbs();
   }
@@ -866,95 +892,150 @@ function nextStep(step) {
 }
 
 function setupCombatUI() {
-  let castBtn = createButton('⚡ CAST SPELL');
-  castBtn.parent(spellContainer);
-  castBtn.style('padding', '10px 24px');
-  castBtn.style('border-radius', '20px');
-  castBtn.style('background', 'rgba(255,0,100,0.5)');
-  castBtn.style('color', 'white');
-  castBtn.style('border', '1px solid rgba(255,255,255,0.4)');
-  castBtn.style('cursor', 'pointer');
-  castBtn.style('font-family', 'Quicksand');
-  castBtn.style('font-size', '1rem');
-  castBtn.mousePressed(() => {
-    if (myPlayerID && spiritHealth > 0) {
-      // Attack: costs 10 spirit from target
-      let elements = document.elementsFromPoint(mouseX, mouseY);
-      elements.forEach(el => {
-        let frame = el.closest('.mirror-frame');
-        if (frame && frame.id && frame.id !== 'local-mirror-container') {
-          // Find the target player
-          for (let pID in remotePlayers) {
-            if (remotePlayers[pID].peerID === frame.id) {
-              let newSpirit = max(0, (remotePlayers[pID].spirit || 100) - 10);
-              db.ref('players/' + pID + '/spirit').set(newSpirit);
-              feedback.html('Spell cast! 💥');
-              for (let i = 0; i < 30; i++) particles.push(new Particle(mouseX, mouseY));
-            }
-          }
-        }
-      });
-    }
-  });
+  if (spellInventoryDiv) spellInventoryDiv.style('display', 'flex');
+  if (spellStatusText) spellStatusText.html("Choose a collected spell, then click the box of whoever you want to cast it at.");
+  renderSpellInventory();
 }
 
 function updateInstructionSteps() {
-  if (currentStep === 3 && fairyMana >= 50) {
+  if (currentStep === 3 && totalCollectedSpells() >= 3) {
     nextStep(4);
   }
 }
 
 function handleSpiritOrbs() {
-  // Neon color palette
-  let neonColors = ['#ff00ff', '#00ffff', '#39ff14', '#ff3131', '#fff01f', '#ff6ec7', '#7b68ee'];
-  
-  // Spawn more orbs, faster
+  let spellTypes = Object.keys(elementalSpells);
+
   if (frameCount % 20 === 0 && spiritOrbs.length < 12) {
-    let c = neonColors[floor(random(neonColors.length))];
+    let spellType = random(spellTypes);
     spiritOrbs.push({
       x: random(50, width - 50),
       y: random(50, height - 50),
-      size: random(15, 35),
+      size: random(26, 42),
       seed: random(1000),
-      neon: c
+      spellType: spellType,
+      vx: random(-0.45, 0.45),
+      vy: random(-0.35, 0.35)
     });
   }
 
-  // Draw & Check Collision
-  let pos = getObjectPosition();
+  let pos = getIndexFingerPosition();
   for (let i = spiritOrbs.length - 1; i >= 0; i--) {
     let o = spiritOrbs[i];
+    let spell = elementalSpells[o.spellType] || elementalSpells.Water;
     let wave = sin(frameCount * 0.05 + o.seed) * 5;
+    o.x += o.vx || 0;
+    o.y += o.vy || 0;
+    if (o.x < 35 || o.x > width - 35) o.vx *= -1;
+    if (o.y < 35 || o.y > height - 35) o.vy *= -1;
     
     push();
-    drawingContext.shadowBlur = 20;
-    drawingContext.shadowColor = o.neon;
-    fill(o.neon);
+    drawingContext.shadowBlur = 26;
+    drawingContext.shadowColor = spell.color;
+    fill(spell.rgb[0], spell.rgb[1], spell.rgb[2], 175);
     noStroke();
     ellipse(o.x, o.y + wave, o.size);
+    fill(255, 255, 255, 235);
+    textAlign(CENTER, CENTER);
+    textSize(o.size * 0.6);
+    text(spell.icon, o.x, o.y + wave);
     pop();
 
-    if (dist(pos.x, pos.y, o.x, o.y + wave) < o.size) {
+    if (pos && dist(pos.x, pos.y, o.x, o.y + wave) < o.size * 0.85) {
       spiritOrbs.splice(i, 1);
-      fairyMana += 10;
-      if (myPlayerID) db.ref('players/' + myPlayerID + '/mana').set(fairyMana);
-      for (let j = 0; j < 20; j++) particles.push(new Particle(o.x, o.y));
+      collectSpell(o.spellType);
+      for (let j = 0; j < 20; j++) {
+        let burst = new Particle(o.x, o.y + wave);
+        burst.color = color(spell.rgb[0], spell.rgb[1], spell.rgb[2]);
+        particles.push(burst);
+      }
     }
+  }
+
+  if (pos) {
+    push();
+    noFill();
+    stroke(255, 255, 255, 220);
+    strokeWeight(2);
+    circle(pos.x, pos.y, 26);
+    pop();
   }
 }
 
+function getIndexFingerPosition() {
+  if (!Array.isArray(hands) || hands.length === 0 || !hands[0]) return null;
+  let hand = hands[0];
+  let tipRaw = null;
+  if (hand.annotations && hand.annotations.indexFinger) {
+    tipRaw = hand.annotations.indexFinger[3];
+  } else if (hand.landmarks && hand.landmarks.length > 8) {
+    tipRaw = hand.landmarks[8];
+  } else if (hand.keypoints && hand.keypoints.length > 8) {
+    tipRaw = hand.keypoints[8];
+  }
+  if (!tipRaw) return null;
+  let rawX = Array.isArray(tipRaw) ? tipRaw[0] : tipRaw.x;
+  let rawY = Array.isArray(tipRaw) ? tipRaw[1] : tipRaw.y;
+  if (rawX === undefined || rawY === undefined) return null;
+  return {
+    x: width - map(rawX, 0, vidW(), 0, width),
+    y: map(rawY, 0, vidH(), 0, height)
+  };
+}
+
+function totalCollectedSpells() {
+  return Object.values(spellInventory).reduce((sum, count) => sum + count, 0);
+}
+
+function collectSpell(spellType) {
+  if (!spellInventory.hasOwnProperty(spellType)) return;
+  spellInventory[spellType] += 1;
+  selectedSpell = spellType;
+  mySpellChoice = spellType;
+  if (myPlayerID) db.ref('players/' + myPlayerID + '/choice').set(mySpellChoice);
+  renderSpellInventory();
+  if (spellStatusText) spellStatusText.html(`${elementalSpells[spellType].icon} ${spellType} spell collected. Click it, then click someone's mirror box.`);
+}
+
+function renderSpellInventory() {
+  if (!spellInventoryDiv) return;
+  spellInventoryDiv.html('');
+  Object.keys(elementalSpells).forEach((spellType) => {
+    let spell = elementalSpells[spellType];
+    let count = spellInventory[spellType];
+    let btn = createButton(`${spell.icon} ${spellType} x${count}`);
+    btn.parent(spellInventoryDiv);
+    btn.attribute('aria-label', `${spellType} spell`);
+    btn.style('padding', '10px 14px');
+    btn.style('border-radius', '14px');
+    btn.style('border', `2px solid ${selectedSpell === spellType ? spell.color : 'rgba(255,255,255,0.35)'}`);
+    btn.style('background', count > 0 ? 'rgba(20,0,40,0.82)' : 'rgba(20,0,40,0.35)');
+    btn.style('color', count > 0 ? '#fff' : 'rgba(255,255,255,0.45)');
+    btn.style('font-family', 'Quicksand');
+    btn.style('font-weight', 'bold');
+    btn.style('cursor', count > 0 ? 'pointer' : 'default');
+    btn.style('box-shadow', selectedSpell === spellType ? `0 0 18px ${spell.color}` : 'none');
+    btn.mousePressed(() => {
+      if (spellInventory[spellType] <= 0) return;
+      selectedSpell = spellType;
+      mySpellChoice = spellType;
+      if (myPlayerID) db.ref('players/' + myPlayerID + '/choice').set(mySpellChoice);
+      if (spellStatusText) spellStatusText.html(`${spell.icon} ${spellType} selected. Click the box of whoever you want to cast it at.`);
+      renderSpellInventory();
+    });
+  });
+}
+
 function mousePressed() {
-  let costMana = 5;
   let costSpirit = 0;
   let damage = 20;
 
   if (isMegaSpell) {
-    costMana = 0;
     costSpirit = 20; // Slightly lower sacrifice
     damage = 35; // Slightly lower damage
   }
 
-  if (currentStep === 4 && fairyMana >= costMana && spiritHealth >= costSpirit) {
+  if (currentStep === 4 && selectedSpell && spellInventory[selectedSpell] > 0 && spiritHealth >= costSpirit) {
     // Check if we aimed at a remote mirror
     let elements = document.elementsFromPoint(mouseX, mouseY);
     elements.forEach(el => {
@@ -973,27 +1054,27 @@ function mousePressed() {
               win = true; // Mega Spell bypasses RPS!
             } else {
               if (mySpellChoice === targetChoice) draw = true;
-              else if (mySpellChoice === 'Fire' && targetChoice === 'Earth') win = true;
-              else if (mySpellChoice === 'Earth' && targetChoice === 'Water') win = true;
-              else if (mySpellChoice === 'Water' && targetChoice === 'Fire') win = true;
+              else if (elementalSpells[mySpellChoice] && elementalSpells[mySpellChoice].beats === targetChoice) win = true;
             }
 
             if (win) {
               db.ref('players/' + pID + '/spirit').set(max(0, (remotePlayers[pID].spirit || 100) - damage));
-              if (isMegaSpell) feedback.html("ANCIENT SPIRIT BLASTED!");
+              feedback.html(`${mySpellChoice} spell cast!`);
             } else if (draw) {
               db.ref('players/' + pID + '/spirit').set(max(0, (remotePlayers[pID].spirit || 100) - 5));
               spiritHealth = max(0, spiritHealth - 5);
+              feedback.html(`${mySpellChoice} met ${targetChoice}. Both spells shimmered out.`);
             } else {
               spiritHealth = max(0, spiritHealth - damage);
               feedback.html("You were countered! Energy backfire!");
             }
 
-            fairyMana -= costMana;
+            spellInventory[mySpellChoice] = max(0, spellInventory[mySpellChoice] - 1);
+            if (spellInventory[mySpellChoice] <= 0) selectedSpell = null;
             spiritHealth -= costSpirit;
+            renderSpellInventory();
 
             if (myPlayerID) {
-              db.ref('players/' + myPlayerID + '/mana').set(fairyMana);
               db.ref('players/' + myPlayerID + '/spirit').set(spiritHealth);
             }
             break;
@@ -1006,7 +1087,8 @@ function mousePressed() {
     let pos = getObjectPosition();
     for (let i = 0; i < (isMegaSpell ? 100 : 30); i++) {
         let p = new Particle(pos.x, pos.y);
-        p.color = isMegaSpell ? color(255, 0, 0) : myFairyColor;
+        let spellColor = elementalSpells[mySpellChoice] ? elementalSpells[mySpellChoice].rgb : [255, 255, 255];
+        p.color = isMegaSpell ? color(255, 0, 0) : color(spellColor[0], spellColor[1], spellColor[2]);
         p.vx = (mouseX - pos.x) * 0.15 + random(-4, 4);
         p.vy = (mouseY - pos.y) * 0.15 + random(-4, 4);
         particles.push(p);
@@ -1175,7 +1257,7 @@ function drawPlayerHud() {
   textSize(13);
   textFont('sans-serif');
   fill(235, 235, 255, 240);
-  text(`MANA: ${fairyMana} | HEALTH: ${hp}%`, cx, 64);
+  text(`SPELLS: ${totalCollectedSpells()} | HEALTH: ${hp}%`, cx, 64);
 
   rectMode(CORNER);
   const barW = 100;
